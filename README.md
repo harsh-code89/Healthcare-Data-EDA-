@@ -2,6 +2,8 @@
 
 A modern, interactive healthcare data analysis and visualization platform built with React, Vite, and Tailwind CSS.
 
+Live url of the app:- https://healthcareeda.netlify.app/
+
 ## Overview
 
 ViteLens is a comprehensive data analysis tool designed for exploring, cleaning, and deriving insights from healthcare datasets. With an intuitive step-by-step workflow, users can upload patient data, validate its quality, perform exploratory data analysis, and uncover meaningful correlations and insights.
