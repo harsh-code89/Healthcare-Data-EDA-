@@ -1,0 +1,30 @@
+patient_id,age,gender,height_cm,weight_kg,systolic_bp,diastolic_bp,fasting_glucose,hba1c,total_cholesterol,ldl,hdl,triglycerides,vitamin_d,smoking_status,alcohol_use,exercise_frequency,sleep_duration,family_history,disease_label,notes
+P001,26,Female,162,56,110,72,88,5.2,172,98,58,102,34,Never,None,Active,7.5,None,Healthy,Annual checkup
+P002,52,Male,175,92,148,94,132,6.8,252,172,36,236,18,Current,Moderate,Light,5.5,Father diabetes,Diabetes,Fatigue
+P003,47,Female,168,81,142,90,118,6.1,228,144,42,210,21,Former,Light,Moderate,6.0,Mother hypertension,Hypertension,Headaches
+P004,61,Male,171,88,156,96,124,6.4,241,163,39,242,19,Current,Heavy,Sedentary,5.0,Heart disease,Heart Disease,Chest tightness
+P005,34,Female,158,64,118,76,92,5.4,186,111,57,124,27,Never,None,Moderate,7.0,None,Healthy,None
+P006,44,Male,182,103,150,92,138,7.1,260,176,34,268,16,Current,Moderate,Light,5.0,Father diabetes,Diabetes,Blurred vision
+P007,58,Female,160,74,146,88,108,5.9,222,138,45,198,24,Former,Light,Moderate,6.0,Stroke,Hypertension,Dizziness
+P008,39,Male,178,79,126,82,99,5.6,198,124,48,144,31,Never,Light,Active,7.5,None,Healthy,None
+P009,63,Female,155,83,164,98,144,7.3,248,169,38,256,17,Current,Heavy,Sedentary,4.5,Diabetes,Diabetes,Neuropathy
+P010,49,Male,169,76,132,86,107,5.8,214,136,44,172,22,Former,Moderate,Light,6.0,Father hypertension,Hypertension,Low energy
+P011,28,Female,165,59,114,70,86,5.1,168,96,61,96,38,Never,None,Active,8.0,None,Healthy,None
+P012,55,Male,173,97,152,95,129,6.6,246,170,35,250,20,Current,Moderate,Sedentary,5.0,Heart disease,Heart Disease,Shortness of breath
+P013,42,Female,166,72,124,80,104,5.7,201,128,49,160,28,Former,Light,Moderate,6.5,Cancer,Healthy,Weight gain
+P014,67,Male,170,94,158,94,141,7.0,264,182,33,290,15,Current,Heavy,Sedentary,4.0,Diabetes,Diabetes,Polyuria
+P015,36,Female,163,68,120,78,95,5.5,190,118,54,138,29,Never,None,Moderate,7.0,None,Healthy,None
+P016,51,Male,176,86,144,88,122,6.2,232,150,40,208,19,Former,Moderate,Light,5.5,Father stroke,Hypertension,Stress
+P017,45,Female,159,77,138,84,116,6.0,218,140,43,184,23,Current,Light,Light,5.5,Mother diabetes,Diabetes,High appetite
+P018,31,Male,181,74,116,74,90,5.3,174,104,56,112,36,Never,Light,Active,7.5,None,Healthy,None
+P019,59,Female,157,82,154,92,126,6.5,244,164,37,248,18,Former,Moderate,Sedentary,5.0,Heart disease,Heart Disease,Palpitations
+P020,48,Male,174,89,140,90,120,6.1,226,148,41,214,20,Current,Moderate,Light,5.5,Father diabetes,Hypertension,Headache
+P021,40,Female,164,70,122,80,101,5.8,205,131,47,168,25,Never,Light,Moderate,6.5,None,Healthy,Desk job
+P022,53,Male,172,99,149,93,134,6.9,258,178,35,274,14,Current,Heavy,Sedentary,4.5,Diabetes,Diabetes,Fatigue
+P023,57,Female,161,79,145,89,119,6.0,229,146,42,206,22,Former,Moderate,Light,5.5,Stroke,Hypertension,Ankle swelling
+P024,46,Male,177,84,128,84,110,5.9,210,132,46,180,26,Former,Light,Moderate,6.5,Father hypertension,Hypertension,None
+P024,46,Male,177,84,128,84,110,5.9,210,132,46,180,26,Former,Light,Moderate,6.5,Father hypertension,Hypertension,None
+P025,29,Female,167,61,112,72,89,5.2,176,102,60,104,37,Never,None,Active,8.0,None,Healthy,None
+P026,64,Male,169,101,162,98,146,7.2,272,188,31,302,12,Current,Heavy,Sedentary,4.5,Heart disease,Heart Disease,Exercise intolerance
+P027,38,Female,160,66,118,76,97,5.4,182,108,55,132,30,Never,Light,Moderate,7.0,None,Healthy,None
+P028,43,Male,183,95,138,86,117,6.0,224,142,43,194,24,Former,Moderate,Moderate,6.0,Father diabetes,Diabetes,Belly fat
