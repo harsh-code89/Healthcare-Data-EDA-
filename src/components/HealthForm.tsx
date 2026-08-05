@@ -379,7 +379,7 @@ export function HealthForm({ onSubmit }: Props) {
               <Sparkles className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">VitaLens</h1>
+              <h1 className="text-xl font-bold text-slate-900">ViteLens</h1>
               <p className="text-xs text-slate-500">AI Health & Longevity Advisor</p>
             </div>
           </div>

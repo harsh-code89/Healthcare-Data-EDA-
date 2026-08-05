@@ -158,7 +158,7 @@ export function HealthReport({ report, onBack }: Props) {
               <Sparkles className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">VitaLens Report</h1>
+              <h1 className="text-xl font-bold text-slate-900">ViteLens Report</h1>
               <p className="text-xs text-slate-500">Your Personalized Health Analysis</p>
             </div>
           </div>
