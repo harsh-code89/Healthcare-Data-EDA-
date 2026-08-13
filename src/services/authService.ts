@@ -1,7 +1,9 @@
-// Simulated Backend for Authentication
-// In a real production app, this would use fetch() to talk to an Express/Node backend,
-// or use the Supabase/Firebase SDK. This local engine ensures zero-breakage on Vercel.
+// ViteLens — Authentication Service (Supabase)
+// Replaces the previous mock/localStorage implementation with real Supabase Auth.
 
+import { supabase } from "../lib/supabaseClient";
+
+// ── Shared types ─────────────────────────────────────────────
 export interface UserProfile {
   id: string;
   name: string;
@@ -9,156 +11,184 @@ export interface UserProfile {
   createdAt: string;
 }
 
-export interface AuthSession {
-  user: UserProfile;
-  token: string;
-  expiresAt: number;
+// ── Helper: fetch user profile from the `profiles` table ─────
+async function fetchProfile(userId: string): Promise<UserProfile | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, name, email, created_at")
+    .eq("id", userId)
+    .single();
+
+  if (error || !data) return null;
+
+  return {
+    id: data.id,
+    name: data.name ?? "",
+    email: data.email ?? "",
+    createdAt: data.created_at,
+  };
 }
 
-const USERS_DB_KEY = "vitelens-mock-users";
-
-// Very basic string hashing to simulate secure password storage (DO NOT use in real production backend)
-function hashString(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return hash.toString();
-}
-
-function generateToken(): string {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36);
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// In-memory or localStorage based "database"
-function getUsers(): Record<string, any> {
-  try {
-    return JSON.parse(localStorage.getItem(USERS_DB_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-function saveUsers(users: Record<string, any>) {
-  localStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
-}
-
+// ── Auth service ──────────────────────────────────────────────
 export const authService = {
-  async signUp(email: string, password: string, name: string): Promise<AuthSession> {
-    await delay(800); // Simulate network
-    const normalizedEmail = email.toLowerCase().trim();
-    const users = getUsers();
 
-    if (users[normalizedEmail]) {
-      throw new Error("An account with this email already exists.");
-    }
+  /**
+   * Sign up with email + password.
+   * Returns { needsVerification: true } when Supabase requires email confirmation
+   * (controlled by Authentication → Email → "Confirm email" in Supabase dashboard).
+   */
+  async signUp(
+    email: string,
+    password: string,
+    name: string
+  ): Promise<{ needsVerification: boolean }> {
+    const { data, error } = await supabase.auth.signUp({
+      email: email.toLowerCase().trim(),
+      password,
+      options: {
+        data: { name: name.trim() || email.split("@")[0] },
+        emailRedirectTo: window.location.origin,
+      },
+    });
 
-    const newUser = {
-      id: "usr_" + generateToken(),
-      email: normalizedEmail,
-      name: name.trim() || normalizedEmail.split("@")[0],
-      passwordHash: hashString(password),
-      createdAt: new Date().toISOString(),
-    };
+    if (error) throw new Error(error.message);
 
-    users[normalizedEmail] = newUser;
-    saveUsers(users);
-
-    const token = "jwt_" + generateToken();
-    return {
-      user: { id: newUser.id, name: newUser.name, email: newUser.email, createdAt: newUser.createdAt },
-      token,
-      expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 7, // 7 days
-    };
+    // If `session` is null, Supabase requires email confirmation before sign-in
+    return { needsVerification: !data.session };
   },
 
-  async signIn(email: string, password: string): Promise<AuthSession> {
-    await delay(600); // Simulate network
-    const normalizedEmail = email.toLowerCase().trim();
-    const users = getUsers();
-    const user = users[normalizedEmail];
-
-    if (!user || user.passwordHash !== hashString(password)) {
-      throw new Error("Invalid email or password.");
-    }
-
-    const token = "jwt_" + generateToken();
-    return {
-      user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt },
-      token,
-      expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 7,
-    };
+  /**
+   * Sign in with email + password.
+   * Session is automatically stored by Supabase; AuthContext picks it up via onAuthStateChange.
+   */
+  async signIn(email: string, password: string): Promise<void> {
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.toLowerCase().trim(),
+      password,
+    });
+    if (error) throw new Error(error.message);
   },
 
-  async socialSignIn(provider: "google" | "github"): Promise<AuthSession> {
-    await delay(1200); // Simulate OAuth redirect & callback
-    const dummyEmail = `user@${provider}.demo.com`;
-    const users = getUsers();
-    
-    let user = users[dummyEmail];
-    if (!user) {
-      user = {
-        id: "usr_" + generateToken(),
-        email: dummyEmail,
-        name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} User`,
-        passwordHash: hashString(generateToken()), // Random unguessable password
-        createdAt: new Date().toISOString(),
-      };
-      users[dummyEmail] = user;
-      saveUsers(users);
-    }
-
-    const token = "jwt_" + generateToken();
-    return {
-      user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt },
-      token,
-      expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 7,
-    };
+  /**
+   * OAuth sign-in (Google / GitHub).
+   * Redirects the browser to the provider — no return value needed.
+   * Supabase handles the callback and fires onAuthStateChange automatically.
+   */
+  async socialSignIn(provider: "google" | "github"): Promise<void> {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: window.location.origin,
+        queryParams: provider === "google"
+          ? { access_type: "offline", prompt: "consent" }
+          : undefined,
+      },
+    });
+    if (error) throw new Error(error.message);
   },
 
+  /**
+   * Send a password reset email.
+   * Always resolves (never leaks whether an account exists).
+   */
   async resetPasswordRequest(email: string): Promise<void> {
-    await delay(800);
-    // Always succeed to prevent email enumeration attacks
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      email.toLowerCase().trim(),
+      { redirectTo: `${window.location.origin}?reset=true` }
+    );
+    // We intentionally swallow errors here to prevent email enumeration
+    if (error) console.warn("Reset email error (suppressed):", error.message);
   },
 
-  async verifyOTP(email: string, code: string): Promise<void> {
-    await delay(500);
-    if (code !== "123456") { // Hardcoded for demo
-      throw new Error("Invalid verification code. Use 123456 for demo.");
-    }
+  /**
+   * Verify an email OTP (sent by Supabase on sign-up or explicit OTP request).
+   */
+  async verifyOTP(email: string, token: string): Promise<void> {
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.toLowerCase().trim(),
+      token,
+      type: "email",
+    });
+    if (error) throw new Error(error.message);
   },
 
-  async changePassword(email: string, oldPassword: string, newPassword: string): Promise<void> {
-    await delay(800);
-    const normalizedEmail = email.toLowerCase().trim();
-    const users = getUsers();
-    const user = users[normalizedEmail];
+  /**
+   * Change password.
+   * Verifies the old password first by re-authenticating, then updates.
+   */
+  async changePassword(
+    email: string,
+    oldPassword: string,
+    newPassword: string
+  ): Promise<void> {
+    // Step 1 — verify old password by attempting a fresh sign-in
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: email.toLowerCase().trim(),
+      password: oldPassword,
+    });
+    if (verifyError) throw new Error("Current password is incorrect.");
 
-    if (!user || user.passwordHash !== hashString(oldPassword)) {
-      throw new Error("Current password is incorrect.");
-    }
-
-    user.passwordHash = hashString(newPassword);
-    saveUsers(users);
+    // Step 2 — update to new password
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw new Error(error.message);
   },
 
-  async updateProfile(email: string, newName: string): Promise<UserProfile> {
-    await delay(500);
-    const normalizedEmail = email.toLowerCase().trim();
-    const users = getUsers();
-    const user = users[normalizedEmail];
+  /**
+   * Update display name in both auth metadata and the `profiles` table.
+   */
+  async updateProfile(userId: string, name: string): Promise<UserProfile> {
+    const trimmedName = name.trim();
 
-    if (!user) throw new Error("User not found.");
+    // Update auth user metadata (so OAuth providers show correct name)
+    const { error: metaError } = await supabase.auth.updateUser({
+      data: { name: trimmedName },
+    });
+    if (metaError) throw new Error(metaError.message);
 
-    user.name = newName.trim();
-    saveUsers(users);
+    // Update profiles table
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ name: trimmedName })
+      .eq("id", userId)
+      .select("id, name, email, created_at")
+      .single();
 
-    return { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt };
+    if (error || !data) throw new Error(error?.message ?? "Failed to update profile.");
+
+    return {
+      id: data.id,
+      name: data.name ?? "",
+      email: data.email ?? "",
+      createdAt: data.created_at,
+    };
+  },
+
+  /**
+   * Fetch a user's profile from the `profiles` table.
+   */
+  async getProfile(userId: string): Promise<UserProfile | null> {
+    return fetchProfile(userId);
+  },
+
+  /**
+   * Sign out of the current session.
+   */
+  async signOut(): Promise<void> {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw new Error(error.message);
+  },
+
+  /**
+   * Log a dataset upload to the `datasets` table (optional history feature).
+   */
+  async logDatasetUpload(
+    userId: string,
+    fileName: string,
+    rowCount: number
+  ): Promise<void> {
+    await supabase
+      .from("datasets")
+      .insert({ user_id: userId, file_name: fileName, row_count: rowCount });
+    // Errors are silently ignored — logging is non-critical
   },
 };

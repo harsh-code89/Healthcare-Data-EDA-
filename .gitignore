@@ -1,3 +1,7 @@
 node_modules
 dist
 .run-logs
+
+# Local environment variables — NEVER commit these
+.env.local
+.env.*.local

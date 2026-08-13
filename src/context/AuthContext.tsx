@@ -1,13 +1,21 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { type AuthSession, type UserProfile } from "../services/authService";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  type ReactNode,
+} from "react";
+import { supabase } from "../lib/supabaseClient";
+import { authService, type UserProfile } from "../services/authService";
 import { useToast } from "../components/Auth/Toast";
 
+// ── Context shape ─────────────────────────────────────────────
 interface AuthContextType {
   user: UserProfile | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (session: AuthSession, rememberMe: boolean) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateUser: (user: UserProfile) => void;
 }
 
@@ -19,61 +27,96 @@ export function useAuth() {
   return context;
 }
 
-const SESSION_KEY = "vitelens-auth-session";
-
+// ── Provider ──────────────────────────────────────────────────
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { showToast } = useToast();
 
-  // On mount, restore session if valid
+  // Build a UserProfile from a Supabase user object when the profiles table
+  // is unavailable (e.g. before the SQL migration has been run).
+  function fallbackProfile(supabaseUser: {
+    id: string;
+    email?: string;
+    user_metadata?: Record<string, string>;
+    created_at: string;
+  }): UserProfile {
+    return {
+      id: supabaseUser.id,
+      name:
+        supabaseUser.user_metadata?.name ||
+        supabaseUser.user_metadata?.full_name ||
+        supabaseUser.email?.split("@")[0] ||
+        "User",
+      email: supabaseUser.email ?? "",
+      createdAt: supabaseUser.created_at,
+    };
+  }
+
+  const resolveUser = useCallback(
+    async (supabaseUser: {
+      id: string;
+      email?: string;
+      user_metadata?: Record<string, string>;
+      created_at: string;
+    }) => {
+      const profile = await authService.getProfile(supabaseUser.id);
+      setUser(profile ?? fallbackProfile(supabaseUser));
+    },
+    []
+  );
+
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
-      if (stored) {
-        const session: AuthSession = JSON.parse(stored);
-        if (session.expiresAt > Date.now()) {
-          setUser(session.user);
-        } else {
-          // Session expired
-          localStorage.removeItem(SESSION_KEY);
-          sessionStorage.removeItem(SESSION_KEY);
-          showToast("Your session has expired. Please log in again.", "info");
-        }
+    // ── 1. Restore session on page load ──────────────────────
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        await resolveUser(session.user as Parameters<typeof resolveUser>[0]);
       }
-    } catch {
-      // Ignore parse errors
-    } finally {
       setIsLoading(false);
+    });
+
+    // ── 2. Subscribe to all future auth state changes ────────
+    // This fires for: SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED,
+    //                 PASSWORD_RECOVERY, USER_UPDATED
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await resolveUser(session.user as Parameters<typeof resolveUser>[0]);
+
+        if (event === "PASSWORD_RECOVERY") {
+          showToast(
+            "You can now set a new password in Account Settings.",
+            "info"
+          );
+        }
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [resolveUser, showToast]);
+
+  const logout = async () => {
+    try {
+      await authService.signOut();
+    } catch {
+      // Force local state clear even if sign-out call fails
     }
-  }, [showToast]);
-
-  const login = (session: AuthSession, rememberMe: boolean) => {
-    setUser(session.user);
-    const storage = rememberMe ? localStorage : sessionStorage;
-    storage.setItem(SESSION_KEY, JSON.stringify(session));
-  };
-
-  const logout = () => {
     setUser(null);
-    localStorage.removeItem(SESSION_KEY);
-    sessionStorage.removeItem(SESSION_KEY);
     showToast("You have been logged out.", "success");
   };
 
   const updateUser = (updatedUser: UserProfile) => {
     setUser(updatedUser);
-    const storage = localStorage.getItem(SESSION_KEY) ? localStorage : sessionStorage;
-    const stored = storage.getItem(SESSION_KEY);
-    if (stored) {
-      const session: AuthSession = JSON.parse(stored);
-      session.user = updatedUser;
-      storage.setItem(SESSION_KEY, JSON.stringify(session));
-    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout, updateUser }}>
+    <AuthContext.Provider
+      value={{ user, isAuthenticated: !!user, isLoading, logout, updateUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

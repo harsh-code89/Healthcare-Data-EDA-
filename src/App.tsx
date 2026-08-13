@@ -315,7 +315,7 @@ export function App() {
             {isAuthenticated ? (
               <>
                 <button type="button" className="btn btn-outline" onClick={() => { setShowProfileModal(true); setIsMenuOpen(false); }}>Profile</button>
-                <button type="button" className="btn btn-solid" onClick={() => { logout(); setIsMenuOpen(false); }}>Sign out</button>
+                <button type="button" className="btn btn-solid" onClick={async () => { await logout(); setIsMenuOpen(false); }}>Sign out</button>
               </>
             ) : (
               <>
@@ -380,7 +380,7 @@ export function App() {
                       <FileDown className="h-3.5 w-3.5" /> Export brief
                     </button>
                     <hr style={{ border: 0, borderTop: "1px solid var(--border)", margin: "4px 0" }} />
-                    <button type="button" className="user-dropdown-item user-dropdown-item-danger" onClick={() => { setShowUserMenu(false); logout(); }}>
+                    <button type="button" className="user-dropdown-item user-dropdown-item-danger" onClick={async () => { setShowUserMenu(false); await logout(); }}>
                       <LogOut className="h-3.5 w-3.5" /> Sign out
                     </button>
                   </div>

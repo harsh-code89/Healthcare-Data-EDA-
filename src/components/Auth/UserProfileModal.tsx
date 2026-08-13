@@ -31,7 +31,8 @@ export function UserProfileModal({ onClose }: UserProfileModalProps) {
     if (!name.trim()) return;
     setIsUpdating(true);
     try {
-      const updated = await authService.updateProfile(user!.email, name);
+      // Pass user.id (Supabase UUID), not email
+      const updated = await authService.updateProfile(user!.id, name);
       updateUser(updated);
       showToast("Profile updated successfully.", "success");
     } catch (err) {
@@ -148,12 +149,19 @@ export function UserProfileModal({ onClose }: UserProfileModalProps) {
               </div>
               <div className="session-info-card">
                 <p><strong>Active session</strong></p>
-                <p style={{ display: "flex", alignItems: "center", gap: "6px" }}><span className="preview-status-dot" /> Verified local browser session</p>
+                <p style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span className="preview-status-dot" /> Supabase Auth — encrypted JWT session
+                </p>
               </div>
               
               <hr style={{ border: 0, borderTop: "1px solid var(--border)", margin: "8px 0" }} />
               
-              <button type="button" className="btn btn-outline" style={{ color: "var(--rose)", borderColor: "var(--rose)", width: "100%", justifyContent: "center" }} onClick={() => { onClose(); logout(); }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ color: "var(--rose)", borderColor: "var(--rose)", width: "100%", justifyContent: "center" }}
+                onClick={async () => { onClose(); await logout(); }}
+              >
                 <LogOut className="h-4 w-4" /> Sign out of ViteLens
               </button>
             </div>
