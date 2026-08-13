@@ -5,6 +5,13 @@ import { App } from "./App";
 import { ToastProvider } from "./components/Auth/Toast";
 import { AuthProvider } from "./context/AuthContext";
 
+// Clear old mock localStorage data if present
+try {
+  localStorage.removeItem("vitelens-mock-users");
+  localStorage.removeItem("vitelens-auth-session");
+  sessionStorage.removeItem("vitelens-auth-session");
+} catch (e) {}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ToastProvider>

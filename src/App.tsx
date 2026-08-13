@@ -138,7 +138,7 @@ function StatCounter({ value, label }: { value: string; label: string }) {
 
 // ── Main App ────────────────────────────────────────────────────────────────
 export function App() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
   const { showToast } = useToast();
 
   const [dataset, setDataset] = useState<DatasetBundle | null>(null);
@@ -281,13 +281,23 @@ export function App() {
     return <InsightsPage rows={filteredRows} cleaningReport={dataset.cleaningReport} insights={insights} />;
   }
 
-  // If auth mode is active, render full-screen auth page
-  if (authMode) {
+  // Wait for Supabase to resolve the session on initial load
+  if (isLoading) {
+    return (
+      <div className="app-shell min-h-screen" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ color: 'var(--fg-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="preview-status-dot" style={{ animation: 'pulse 1.5s infinite' }} /> Loading ViteLens...
+        </div>
+      </div>
+    );
+  }
+
+  // Enforce authentication at the root level: if not logged in, force AuthPage
+  if (!isAuthenticated) {
     return (
       <AuthPage
-        mode={authMode}
+        mode={authMode || "sign-up"}
         onModeChange={setAuthMode}
-        onContinueAsGuest={() => setAuthMode(null)}
       />
     );
   }

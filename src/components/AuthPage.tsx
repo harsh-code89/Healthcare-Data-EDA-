@@ -23,10 +23,9 @@ export type AuthMode = "sign-in" | "sign-up" | "reset" | "otp";
 interface AuthPageProps {
   mode: AuthMode;
   onModeChange: (mode: AuthMode) => void;
-  onContinueAsGuest: () => void; // Also called after successful auth to dismiss the page
 }
 
-export function AuthPage({ mode, onModeChange, onContinueAsGuest }: AuthPageProps) {
+export function AuthPage({ mode, onModeChange }: AuthPageProps) {
   const { showToast } = useToast();
 
   const [name, setName] = useState("");
@@ -72,7 +71,7 @@ export function AuthPage({ mode, onModeChange, onContinueAsGuest }: AuthPageProp
         } else {
           // Email confirmation is OFF in Supabase — user is auto-logged in
           showToast(`Welcome to ViteLens! 🎉`, "success");
-          onContinueAsGuest(); // Dismiss auth page — AuthContext picks up session automatically
+          // AuthContext will automatically redirect because it listens to session changes
         }
       }
 
@@ -82,7 +81,6 @@ export function AuthPage({ mode, onModeChange, onContinueAsGuest }: AuthPageProp
         // Session is stored automatically by Supabase SDK
         // AuthContext's onAuthStateChange picks it up and sets user state
         showToast("Signed in successfully. Welcome back!", "success");
-        onContinueAsGuest(); // Dismiss auth page
       }
 
       // ── Forgot password ───────────────────────────────────
@@ -99,7 +97,6 @@ export function AuthPage({ mode, onModeChange, onContinueAsGuest }: AuthPageProp
       else if (mode === "otp") {
         await authService.verifyOTP(email, otp);
         showToast("Email verified! Welcome to ViteLens 🎉", "success");
-        onContinueAsGuest(); // Dismiss — Supabase session is now active
       }
     } catch (err) {
       showToast(
@@ -201,15 +198,6 @@ export function AuthPage({ mode, onModeChange, onContinueAsGuest }: AuthPageProp
       </div>
 
       <div className="auth-panel">
-        <button
-          type="button"
-          className="auth-back"
-          onClick={onContinueAsGuest}
-          disabled={isLoading}
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to ViteLens
-        </button>
-
         <div className="auth-brand">
           <span className="security-brand-mark" />
           <span>ViteLens</span>
