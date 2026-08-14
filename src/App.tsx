@@ -153,6 +153,7 @@ export function App() {
   const [isDark, setIsDark] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [pendingScrollToWorkspace, setPendingScrollToWorkspace] = useState(false);
   const deferredSearch = useDeferredValue(filters.search);
 
   const effectiveFilters = { ...filters, search: deferredSearch };
@@ -199,6 +200,18 @@ export function App() {
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, [showUserMenu]);
+
+  // After successful auth, scroll to workspace
+  useEffect(() => {
+    if (pendingScrollToWorkspace && isAuthenticated) {
+      setPendingScrollToWorkspace(false);
+      setAuthMode(null);
+      // Small delay to let the authenticated view render first
+      setTimeout(() => {
+        document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 150);
+    }
+  }, [pendingScrollToWorkspace, isAuthenticated]);
 
   async function ingestText(fileName: string, text: string) {
     setError(null);
@@ -296,8 +309,9 @@ export function App() {
   if (!isAuthenticated) {
     return (
       <AuthPage
-        mode={authMode || "sign-up"}
-        onModeChange={setAuthMode}
+        mode={authMode || "sign-in"}
+        onModeChange={(m) => setAuthMode(m as AuthMode)}
+        onSuccess={() => setPendingScrollToWorkspace(true)}
       />
     );
   }

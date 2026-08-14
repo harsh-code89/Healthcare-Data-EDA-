@@ -22,10 +22,11 @@ export type AuthMode = "sign-in" | "sign-up" | "reset" | "otp";
 
 interface AuthPageProps {
   mode: AuthMode;
-  onModeChange: (mode: AuthMode) => void;
+  onModeChange: (mode: AuthMode | null) => void;
+  onSuccess?: () => void;
 }
 
-export function AuthPage({ mode, onModeChange }: AuthPageProps) {
+export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
   const { showToast } = useToast();
 
   const [name, setName] = useState("");
@@ -71,7 +72,8 @@ export function AuthPage({ mode, onModeChange }: AuthPageProps) {
         } else {
           // Email confirmation is OFF in Supabase — user is auto-logged in
           showToast(`Welcome to ViteLens! 🎉`, "success");
-          // AuthContext will automatically redirect because it listens to session changes
+          // Notify parent to redirect to dashboard
+          onSuccess?.();
         }
       }
 
@@ -81,6 +83,8 @@ export function AuthPage({ mode, onModeChange }: AuthPageProps) {
         // Session is stored automatically by Supabase SDK
         // AuthContext's onAuthStateChange picks it up and sets user state
         showToast("Signed in successfully. Welcome back!", "success");
+        // Notify parent to redirect to dashboard
+        onSuccess?.();
       }
 
       // ── Forgot password ───────────────────────────────────
@@ -97,6 +101,7 @@ export function AuthPage({ mode, onModeChange }: AuthPageProps) {
       else if (mode === "otp") {
         await authService.verifyOTP(email, otp);
         showToast("Email verified! Welcome to ViteLens 🎉", "success");
+        onSuccess?.();
       }
     } catch (err) {
       showToast(
@@ -116,10 +121,21 @@ export function AuthPage({ mode, onModeChange }: AuthPageProps) {
       await authService.socialSignIn(provider);
       // Note: execution doesn't continue here because the browser navigates away.
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : `Failed to sign in with ${provider}.`,
-        "error"
-      );
+      const message = err instanceof Error ? err.message : `Failed to sign in with ${provider}.`;
+      // Detect common OAuth misconfiguration errors
+      if (
+        message.toLowerCase().includes("redirect") ||
+        message.toLowerCase().includes("uri") ||
+        message.toLowerCase().includes("oauth") ||
+        message.toLowerCase().includes("provider")
+      ) {
+        showToast(
+          `⚠️ Google OAuth isn’t configured yet. Please set up the redirect URI in Google Cloud Console and Supabase. Use email/password sign-in for now.`,
+          "error"
+        );
+      } else {
+        showToast(message, "error");
+      }
       setIsLoading(false);
     }
   }
