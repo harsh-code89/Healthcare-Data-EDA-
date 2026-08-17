@@ -31,7 +31,6 @@ import {
   Search,
   Settings,
   ShieldCheck,
-  Sparkles,
   Sun,
   UploadCloud,
   Users,

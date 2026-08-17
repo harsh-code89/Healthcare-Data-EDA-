@@ -15,7 +15,6 @@ import {
   UserRound,
   Loader2,
   Github,
-  RefreshCw,
 } from "lucide-react";
 
 export type AuthMode = "sign-in" | "sign-up" | "reset" | "otp";
