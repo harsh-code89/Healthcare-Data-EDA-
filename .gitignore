@@ -3,5 +3,14 @@ dist
 .run-logs
 
 # Local environment variables — NEVER commit these
+.env
 .env.local
 .env.*.local
+.env.development
+.env.production
+.env.staging
+.env.test
+
+# OS artifacts
+.DS_Store
+Thumbs.db

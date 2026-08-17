@@ -10,7 +10,7 @@ try {
   localStorage.removeItem("vitelens-mock-users");
   localStorage.removeItem("vitelens-auth-session");
   sessionStorage.removeItem("vitelens-auth-session");
-} catch (e) {}
+} catch {}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
