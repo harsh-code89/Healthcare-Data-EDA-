@@ -5,6 +5,10 @@
 [build.environment]
   NODE_VERSION = "20"
 
+[secrets_scanning]
+  enabled = true
+  omit_keys = ["VITE_SUPABASE_ANON_KEY", "VITE_SUPABASE_URL"]
+
 # SPA fallback — serve index.html for every route so React Router / hash routing works
 [[redirects]]
   from   = "/*"
