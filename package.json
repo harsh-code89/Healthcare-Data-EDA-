@@ -1,12 +1,25 @@
 {
-  "name": "react-vite-tailwind",
+  "name": "careos",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "description": "CareOS — Open-source digital health platform for India. Connect your healthcare journey.",
+  "keywords": [
+    "healthcare",
+    "digital-health",
+    "india",
+    "ABDM",
+    "patient-records",
+    "react",
+    "typescript"
+  ],
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
@@ -14,6 +27,7 @@
     "lucide-react": "^0.575.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-router-dom": "^7.18.3",
     "tailwind-merge": "3.4.0"
   },
   "devDependencies": {
@@ -24,7 +38,10 @@
     "@vitejs/plugin-react": "5.1.1",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3",
-    "vite": "^7.3.2",
-    "vite-plugin-singlefile": "2.3.0"
+    "vite": "^7.3.2"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=9.0.0"
   }
 }

@@ -9,13 +9,17 @@ export interface UserProfile {
   name: string;
   email: string;
   createdAt: string;
+  bloodGroup?: string;
+  allergies?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
 }
 
 // ── Helper: fetch user profile from the `profiles` table ─────
 async function fetchProfile(userId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, name, email, created_at")
+    .select("*")
     .eq("id", userId)
     .single();
 
@@ -26,6 +30,10 @@ async function fetchProfile(userId: string): Promise<UserProfile | null> {
     name: data.name ?? "",
     email: data.email ?? "",
     createdAt: data.created_at,
+    bloodGroup: data.blood_group,
+    allergies: data.allergies,
+    emergencyContactName: data.emergency_contact_name,
+    emergencyContactPhone: data.emergency_contact_phone,
   };
 }
 
@@ -134,32 +142,45 @@ export const authService = {
   },
 
   /**
-   * Update display name in both auth metadata and the `profiles` table.
+   * Update display name and medical profile in both auth metadata and the `profiles` table.
    */
-  async updateProfile(userId: string, name: string): Promise<UserProfile> {
-    const trimmedName = name.trim();
+  async updateProfile(userId: string, data: Partial<UserProfile>): Promise<UserProfile> {
+    const trimmedName = data.name?.trim();
 
-    // Update auth user metadata (so OAuth providers show correct name)
-    const { error: metaError } = await supabase.auth.updateUser({
-      data: { name: trimmedName },
-    });
-    if (metaError) throw new Error(metaError.message);
+    if (trimmedName) {
+      // Update auth user metadata (so OAuth providers show correct name)
+      const { error: metaError } = await supabase.auth.updateUser({
+        data: { name: trimmedName },
+      });
+      if (metaError) throw new Error(metaError.message);
+    }
+
+    const updates: any = {};
+    if (trimmedName) updates.name = trimmedName;
+    if (data.bloodGroup !== undefined) updates.blood_group = data.bloodGroup;
+    if (data.allergies !== undefined) updates.allergies = data.allergies;
+    if (data.emergencyContactName !== undefined) updates.emergency_contact_name = data.emergencyContactName;
+    if (data.emergencyContactPhone !== undefined) updates.emergency_contact_phone = data.emergencyContactPhone;
 
     // Update profiles table
-    const { data, error } = await supabase
+    const { data: updatedData, error } = await supabase
       .from("profiles")
-      .update({ name: trimmedName })
+      .update(updates)
       .eq("id", userId)
-      .select("id, name, email, created_at")
+      .select("*")
       .single();
 
-    if (error || !data) throw new Error(error?.message ?? "Failed to update profile.");
+    if (error || !updatedData) throw new Error(error?.message ?? "Failed to update profile.");
 
     return {
-      id: data.id,
-      name: data.name ?? "",
-      email: data.email ?? "",
-      createdAt: data.created_at,
+      id: updatedData.id,
+      name: updatedData.name ?? "",
+      email: updatedData.email ?? "",
+      createdAt: updatedData.created_at,
+      bloodGroup: updatedData.blood_group,
+      allergies: updatedData.allergies,
+      emergencyContactName: updatedData.emergency_contact_name,
+      emergencyContactPhone: updatedData.emergency_contact_phone,
     };
   },
 
