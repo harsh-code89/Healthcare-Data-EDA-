@@ -70,7 +70,7 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
           showToast("Check your inbox and click the confirmation link.", "info");
         } else {
           // Email confirmation is OFF in Supabase — user is auto-logged in
-          showToast(`Welcome to ViteLens! 🎉`, "success");
+          showToast(`Welcome to CareOS! 🎉`, "success");
           // Notify parent to redirect to dashboard
           onSuccess?.();
         }
@@ -99,7 +99,7 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
       // ── OTP verification ──────────────────────────────────
       else if (mode === "otp") {
         await authService.verifyOTP(email, otp);
-        showToast("Email verified! Welcome to ViteLens 🎉", "success");
+        showToast("Email verified! Welcome to CareOS 🎉", "success");
         onSuccess?.();
       }
     } catch (err) {
@@ -149,7 +149,7 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
           <div className="auth-art-grid" />
         </div>
         <div className="auth-panel">
-          <div className="auth-brand"><span className="security-brand-mark" /><span>ViteLens</span></div>
+          <div className="auth-brand"><span className="security-brand-mark" /><span>CareOS</span></div>
 
           <div style={{ textAlign: "center", padding: "24px 0" }}>
             <div style={{
@@ -205,22 +205,22 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
         <div className="auth-art-orb auth-art-orb-two" />
         <div className="auth-art-grid" />
         <div className="auth-art-card auth-art-card-one">
-          <span>Data quality</span><strong>98.4%</strong><i />
+          <span>Active patients</span><strong>2,847</strong><i />
         </div>
         <div className="auth-art-card auth-art-card-two">
-          <span><span className="auth-art-live" /> Live cohort</span><strong>2,847</strong>
+          <span><span className="auth-art-live" /> Uptime</span><strong>99.9%</strong>
         </div>
       </div>
 
       <div className="auth-panel">
         <div className="auth-brand">
           <span className="security-brand-mark" />
-          <span>ViteLens</span>
+          <span>CareOS</span>
         </div>
 
         <div className="auth-copy">
           <p className="auth-overline">
-            <Sparkles className="h-3.5 w-3.5" /> Clinical data intelligence
+            <Sparkles className="h-3.5 w-3.5" /> Your Personal Health Record
           </p>
           <h1>
             {isOtp
@@ -228,7 +228,7 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
               : isReset
               ? "Reset your access."
               : isSignUp
-              ? "Create your workspace."
+              ? "Create your account."
               : "Welcome back."}
           </h1>
           <p>
@@ -236,7 +236,7 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
               ? `Enter the verification code sent to ${email}.`
               : isReset
               ? "Enter your email and we'll send a secure reset link."
-              : "Keep your analysis workspace close, your files local, and your next decision clear."}
+              : "Your health records, appointments, medications and care team — all in one secure place."}
           </p>
         </div>
 
@@ -420,7 +420,7 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
             </button>
           ) : (
             <>
-              <span>{isSignUp ? "Already have an account?" : "New to ViteLens?"}</span>
+              <span>{isSignUp ? "Already have an account?" : "New to CareOS?"}</span>
               <button
                 type="button"
                 onClick={() => onModeChange(isSignUp ? "sign-in" : "sign-up")}

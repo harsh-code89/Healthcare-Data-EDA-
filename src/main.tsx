@@ -7,9 +7,12 @@ import { AuthProvider } from "./context/AuthContext";
 
 // Clear old mock localStorage data if present
 try {
+  // Clear any legacy ViteLens or old CareOS mock data keys
   localStorage.removeItem("vitelens-mock-users");
   localStorage.removeItem("vitelens-auth-session");
   sessionStorage.removeItem("vitelens-auth-session");
+  localStorage.removeItem("careos-mock-users");
+  sessionStorage.removeItem("careos-auth-session");
 } catch {}
 
 createRoot(document.getElementById("root")!).render(

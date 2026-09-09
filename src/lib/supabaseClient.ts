@@ -6,7 +6,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn(
-    "⚠️  ViteLens: Supabase environment variables are missing.\n" +
+    "⚠️  CareOS: Supabase environment variables are missing.\n" +
     "   Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env.local file.\n" +
     "   See: https://supabase.com/docs/guides/getting-started"
   );
