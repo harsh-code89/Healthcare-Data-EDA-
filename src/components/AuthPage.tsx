@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { authService } from "../services/authService";
 import { useToast } from "./Auth/Toast";
 import { PasswordMeter } from "./Auth/PasswordMeter";
+import { isSupabaseConfigured } from "../lib/supabaseClient";
 import {
   ArrowLeft,
   ArrowRight,
@@ -15,6 +16,7 @@ import {
   UserRound,
   Loader2,
   Github,
+  AlertTriangle,
 } from "lucide-react";
 
 export type AuthMode = "sign-in" | "sign-up" | "reset" | "otp";
@@ -275,6 +277,21 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
             </div>
             <div className="auth-divider"><span>or continue with email</span></div>
           </>
+        )}
+
+        {/* Supabase misconfiguration warning — only visible when env vars are missing */}
+        {!isSupabaseConfigured && (
+          <div style={{
+            display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px",
+            background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, marginBottom: 16,
+          }}>
+            <AlertTriangle className="h-4 w-4 shrink-0" style={{ color: "#dc2626", marginTop: 2 }} />
+            <div style={{ fontSize: 13, color: "#991b1b", lineHeight: 1.5 }}>
+              <strong>Configuration error:</strong> This app is not connected to a database.
+              The <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> environment
+              variables must be set in your Netlify dashboard before sign-up or sign-in will work.
+            </div>
+          </div>
         )}
 
         {/* Main form */}
