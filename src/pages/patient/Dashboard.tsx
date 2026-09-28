@@ -11,17 +11,8 @@ import { useState, useEffect } from 'react';
 export function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { appointments, activeMedications, reports, timelineEvents, isLoading: dataLoading } = usePatientData();
+  const { appointments, activeMedications, reports, timelineEvents, isLoading } = usePatientData();
   const [greeting, setGreeting] = useState('');
-  
-  // Combine artificial and data loading states to prevent flicker
-  const [artificialLoading, setArtificialLoading] = useState(true);
-  useEffect(() => {
-    const timer = setTimeout(() => setArtificialLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const loading = dataLoading || artificialLoading;
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -39,7 +30,7 @@ export function Dashboard() {
   const latestReport = [...reports].sort((a, b) => new Date(b.reportDate).getTime() - new Date(a.reportDate).getTime())[0];
   const recentTimeline = [...timelineEvents].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3);
   
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="co-skeleton h-24 w-full"></div>
@@ -217,19 +208,19 @@ export function Dashboard() {
       {/* Emergency Banner */}
       <div className="co-emergency-card flex flex-col md:flex-row items-center justify-between gap-6 cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/emergency')}>
         <div className="flex items-center gap-6">
-          <div className="co-blood-group">--</div>
+          <div className="co-blood-group">{user?.bloodGroup || '?'}</div>
           <div>
             <h3 className="font-bold text-red-900 text-lg mb-1">Emergency Profile</h3>
             <div className="text-sm text-red-700 mb-1">
-              <strong>Allergies:</strong> Not configured
+              <strong>Allergies:</strong> {user?.allergies || <span className="italic text-red-400">Not configured</span>}
             </div>
             <div className="text-sm text-red-700">
-              <strong>Emergency Contact:</strong> Not configured
+              <strong>Emergency Contact:</strong> {user?.emergencyContactName ? `${user.emergencyContactName} — ${user.emergencyContactPhone || 'No number'}` : <span className="italic text-red-400">Not configured</span>}
             </div>
           </div>
         </div>
         <button className="co-btn co-btn-danger w-full md:w-auto shrink-0">
-          Setup Card
+          {user?.bloodGroup ? 'Update Card' : 'Setup Card'}
         </button>
       </div>
 

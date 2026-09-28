@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, Activity, FileText } from 'lucide-react';
+import { Send, Bot, User, Sparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usePatientData } from '../../hooks/usePatientData';
 

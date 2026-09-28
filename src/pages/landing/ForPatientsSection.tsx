@@ -40,18 +40,18 @@ export function ForPatientsSection() {
           
           <div className="relative">
             <div className="aspect-[4/3] rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 backdrop-blur-sm shadow-2xl flex flex-col">
-              {/* Mock App UI */}
+              {/* Preview App UI */}
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 rounded-full bg-cyan-600 flex items-center justify-center text-xl font-bold">P</div>
+                <div className="w-12 h-12 rounded-full bg-cyan-600 flex items-center justify-center text-xl font-bold">A</div>
                 <div>
-                  <div className="font-bold text-lg text-white">Priya Sharma</div>
-                  <div className="text-sm text-cyan-300">Blood Group: O+</div>
+                  <div className="font-bold text-lg text-white">Your Profile</div>
+                  <div className="text-sm text-cyan-300">Blood Group: Configured</div>
                 </div>
               </div>
               
               <div className="bg-slate-900/80 rounded-xl p-4 border border-slate-700 mb-4">
                 <div className="text-xs text-slate-400 mb-1">Critical Allergy</div>
-                <div className="text-red-400 font-medium">Penicillin (Severe)</div>
+                <div className="text-red-400 font-medium">Saved securely in your profile</div>
               </div>
               
               <div className="bg-slate-900/80 rounded-xl p-4 border border-slate-700 flex-1">
@@ -60,14 +60,14 @@ export function ForPatientsSection() {
                   <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5" />
                   <div>
                     <div className="text-sm text-white font-medium">Complete Blood Count</div>
-                    <div className="text-xs text-slate-400">12 Aug 2026</div>
+                    <div className="text-xs text-slate-400">Uploaded to your record</div>
                   </div>
                 </div>
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5" />
                   <div>
-                    <div className="text-sm text-white font-medium">Consultation - Dr. Rao</div>
-                    <div className="text-xs text-slate-400">05 Sep 2026 (Upcoming)</div>
+                    <div className="text-sm text-white font-medium">Consultation — Upcoming</div>
+                    <div className="text-xs text-slate-400">Synced with appointments</div>
                   </div>
                 </div>
               </div>

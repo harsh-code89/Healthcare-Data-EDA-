@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 interface EmptyStateProps {
   icon: LucideIcon;
@@ -7,7 +8,7 @@ interface EmptyStateProps {
   action?: {
     label: string;
     onClick: () => void;
-  };
+  } | ReactNode;
 }
 
 export function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
@@ -17,12 +18,19 @@ export function EmptyState({ icon: Icon, title, description, action }: EmptyStat
         <Icon className="h-6 w-6 text-slate-500" />
       </div>
       <h3 className="text-lg font-semibold text-slate-900 mb-2">{title}</h3>
-      <p className="text-slate-500 max-w-sm mb-6">{description}</p>
+      <p className="text-slate-500 max-w-sm mb-4">{description}</p>
       
       {action && (
-        <button onClick={action.onClick} className="co-btn co-btn-primary">
-          {action.label}
-        </button>
+        typeof action === 'object' && 'label' in (action as object)
+          ? (
+            <button 
+              onClick={(action as { label: string; onClick: () => void }).onClick} 
+              className="co-btn co-btn-primary"
+            >
+              {(action as { label: string; onClick: () => void }).label}
+            </button>
+          )
+          : action as ReactNode
       )}
     </div>
   );

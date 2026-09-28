@@ -205,10 +205,10 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
         <div className="auth-art-orb auth-art-orb-two" />
         <div className="auth-art-grid" />
         <div className="auth-art-card auth-art-card-one">
-          <span>Active patients</span><strong>2,847</strong><i />
+          <span>End-to-end</span><strong>Encrypted</strong><i />
         </div>
         <div className="auth-art-card auth-art-card-two">
-          <span><span className="auth-art-live" /> Uptime</span><strong>99.9%</strong>
+          <span><span className="auth-art-live" /> Data</span><strong>Protected</strong>
         </div>
       </div>
 

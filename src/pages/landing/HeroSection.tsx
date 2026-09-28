@@ -57,7 +57,7 @@ export function HeroSection({ onGetStarted }: { onGetStarted: () => void }) {
           </div>
           {/* Mock Content */}
           <div className="p-6 md:p-10 bg-slate-50">
-            <h2 className="text-2xl font-bold text-slate-800 mb-6">Good morning, Priya ☀️</h2>
+            <h2 className="text-2xl font-bold text-slate-800 mb-6">Good morning, Alex ☀️</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-start gap-4">
@@ -65,15 +65,15 @@ export function HeroSection({ onGetStarted }: { onGetStarted: () => void }) {
                 <div>
                   <div className="text-sm text-slate-500 font-medium">Next Appointment</div>
                   <div className="font-bold text-slate-900 mt-1">Tomorrow, 10:30 AM</div>
-                  <div className="text-sm text-slate-600">Dr. Venkat Rao</div>
+                  <div className="text-sm text-slate-600">General Checkup</div>
                 </div>
               </div>
               <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-start gap-4">
                 <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg"><Pill className="h-5 w-5" /></div>
                 <div>
                   <div className="text-sm text-slate-500 font-medium">Active Medications</div>
-                  <div className="font-bold text-slate-900 mt-1">3 Prescriptions</div>
-                  <div className="text-sm text-slate-600">Next due: 08:00 AM</div>
+                  <div className="font-bold text-slate-900 mt-1">2 Prescriptions</div>
+                  <div className="text-sm text-slate-600">All on schedule</div>
                 </div>
               </div>
               <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-start gap-4">
@@ -81,7 +81,7 @@ export function HeroSection({ onGetStarted }: { onGetStarted: () => void }) {
                 <div>
                   <div className="text-sm text-slate-500 font-medium">Recent Report</div>
                   <div className="font-bold text-slate-900 mt-1">Complete Blood Count</div>
-                  <div className="text-sm text-slate-600">Uploaded 2 days ago</div>
+                  <div className="text-sm text-slate-600">Uploaded recently</div>
                 </div>
               </div>
             </div>

@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   FileText, UploadCloud, Stethoscope, FileBarChart2, 
-  Pill, Activity, Syringe, Scissors, Download, Eye
+  Pill, Activity, Syringe, Scissors, Eye, ExternalLink
 } from 'lucide-react';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { usePatientData } from '../../hooks/usePatientData';
@@ -11,8 +12,8 @@ const TABS = [
 ];
 
 export function HealthRecord() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('All');
-  const [showUpload, setShowUpload] = useState(false);
   
   const { timelineEvents } = usePatientData();
 
@@ -60,8 +61,8 @@ export function HealthRecord() {
           <h1 className="co-page-title">Health Record</h1>
           <p className="co-page-subtitle">Your complete medical history, organized.</p>
         </div>
-        <button className="co-btn co-btn-primary" onClick={() => setShowUpload(true)}>
-          <UploadCloud className="h-4 w-4" /> Upload Document
+        <button className="co-btn co-btn-primary" onClick={() => navigate('/reports')}>
+          <UploadCloud className="h-4 w-4" /> Upload Report
         </button>
       </div>
 
@@ -89,7 +90,12 @@ export function HealthRecord() {
         <EmptyState 
           icon={FileText} 
           title={`No ${activeTab.toLowerCase()} found`} 
-          description="You haven't uploaded or logged any records of this type yet." 
+          description="You haven't uploaded or logged any records of this type yet."
+          action={
+            <button className="co-btn co-btn-primary mt-4" onClick={() => navigate('/reports')}>
+              <ExternalLink className="h-4 w-4" /> Go to Reports
+            </button>
+          }
         />
       ) : (
         <div className="space-y-8">
@@ -116,41 +122,12 @@ export function HealthRecord() {
                       <button className="co-btn co-btn-ghost co-btn-sm" title="View Document">
                         <Eye className="h-4 w-4" /> <span className="sm:hidden">View</span>
                       </button>
-                      <button className="co-btn co-btn-ghost co-btn-sm" title="Download">
-                        <Download className="h-4 w-4" /> <span className="sm:hidden">Download</span>
-                      </button>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Upload Modal Demo */}
-      {showUpload && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-800">Upload Document</h3>
-              <button onClick={() => setShowUpload(false)} className="text-slate-400 hover:text-slate-600">✕</button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center text-center bg-slate-50">
-                <UploadCloud className="h-10 w-10 text-cyan-600 mb-3" />
-                <p className="text-sm font-medium text-slate-700 mb-1">Drag and drop file here</p>
-                <p className="text-xs text-slate-500">PDF, JPG or PNG (max 10MB)</p>
-              </div>
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                <strong>Demo Mode:</strong> File uploading is disabled in this demonstration environment.
-              </div>
-            </div>
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
-              <button onClick={() => setShowUpload(false)} className="co-btn co-btn-ghost">Cancel</button>
-              <button onClick={() => setShowUpload(false)} className="co-btn co-btn-primary" disabled>Upload</button>
-            </div>
-          </div>
         </div>
       )}
     </div>

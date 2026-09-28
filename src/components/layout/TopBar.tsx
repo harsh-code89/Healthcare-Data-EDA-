@@ -76,8 +76,8 @@ export function TopBar() {
         {showUserMenu && (
           <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-lg py-2 z-50">
             <div className="px-4 py-3 border-b border-slate-100">
-              <p className="text-sm font-medium text-slate-900">{user?.name || 'Demo User'}</p>
-              <p className="text-xs text-slate-500 truncate">{user?.email || 'demo@careos.in'}</p>
+              <p className="text-sm font-medium text-slate-900">{user?.name || 'My Account'}</p>
+              <p className="text-xs text-slate-500 truncate">{user?.email || ''}</p>
             </div>
             
             <div className="py-1">

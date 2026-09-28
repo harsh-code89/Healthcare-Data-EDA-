@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Stethoscope, Plus, MapPin, Phone, Mail } from 'lucide-react';
+import { Users, Plus, MapPin, Phone, Mail } from 'lucide-react';
 import { usePatientData } from '../../hooks/usePatientData';
 import { patientService } from '../../services/patientService';
 import { EmptyState } from '../../components/shared/EmptyState';
