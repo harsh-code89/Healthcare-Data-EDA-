@@ -51,7 +51,8 @@ function AppRouter() {
         </button>
         <AuthPage 
           mode={authMode} 
-          onModeChange={(mode) => setAuthMode(mode || 'sign-in')} 
+          onModeChange={(mode) => setAuthMode(mode || 'sign-in')}
+          onSuccess={() => setShowAuth(false)}
         />
       </div>
     );
