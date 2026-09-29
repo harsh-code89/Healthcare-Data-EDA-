@@ -87,8 +87,7 @@ export function Family() {
                   </div>
                 </div>
               </div>
-              <div className="co-card-footer flex justify-between bg-slate-50">
-                <button onClick={() => alert("Switching profiles will be implemented in a future update.")} className="text-indigo-600 font-medium text-sm hover:text-indigo-700">Switch to profile</button>
+              <div className="co-card-footer flex justify-end bg-slate-50">
                 <button onClick={() => handleDelete(member.id)} className="text-red-500 font-medium text-sm hover:text-red-600">Remove</button>
               </div>
             </div>

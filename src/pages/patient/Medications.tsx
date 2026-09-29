@@ -126,14 +126,7 @@ export function Medications() {
                   <div className="text-xs text-slate-400">
                     Started: {med.startDate} {med.endDate ? ` • Ended: ${med.endDate}` : ''}
                   </div>
-                  {med.isActive && (
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <span className="text-xs font-medium text-slate-600">Reminder</span>
-                      <div className={`w-8 h-4 rounded-full transition-colors relative ${med.reminderEnabled ? 'bg-cyan-500' : 'bg-slate-300'}`}>
-                        <div className={`absolute top-0.5 left-0.5 bg-white w-3 h-3 rounded-full transition-transform ${med.reminderEnabled ? 'translate-x-4' : ''}`} />
-                      </div>
-                    </label>
-                  )}
+                  {/* Removed fake reminder toggle to comply with no mock feature rule */}
                 </div>
               </div>
             </div>

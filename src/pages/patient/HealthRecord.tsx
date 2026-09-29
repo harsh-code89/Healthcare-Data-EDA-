@@ -117,12 +117,6 @@ export function HealthRecord() {
                       <div className="text-sm text-slate-600 mb-1">{record.provider} {record.hospital && `• ${record.hospital}`}</div>
                       <div className="text-xs text-slate-400">{record.date}</div>
                     </div>
-                    
-                    <div className="flex items-center gap-2 mt-2 sm:mt-0">
-                      <button className="co-btn co-btn-ghost co-btn-sm" title="View Document">
-                        <Eye className="h-4 w-4" /> <span className="sm:hidden">View</span>
-                      </button>
-                    </div>
                   </div>
                 ))}
               </div>

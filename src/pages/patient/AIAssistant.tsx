@@ -49,45 +49,19 @@ export function AIAssistant() {
     setInput('');
     setIsTyping(true);
 
-    // Simple mocked AI response logic based on context
+    // AI functionality requires a backend LLM integration which is currently pending.
+    // Instead of faking the response, we explicitly inform the user.
     setTimeout(() => {
-      let responseContent = "I understand. I'm here to help you manage your health journey. Remember to consult your primary care physician for any serious concerns.";
-      
-      const lowerInput = userMessage.content.toLowerCase();
-      
-      if (lowerInput.includes('medication') || lowerInput.includes('pill') || lowerInput.includes('medicine')) {
-        if (activeMedications.length > 0) {
-          const medList = activeMedications.map(m => `${m.name} (${m.dosage}, ${m.frequency})`).join(', ');
-          responseContent = `You are currently taking: ${medList}. Always remember to take them exactly as prescribed by your doctor.`;
-        } else {
-          responseContent = "I don't see any active medications in your health record right now.";
-        }
-      } else if (lowerInput.includes('appointment') || lowerInput.includes('doctor') || lowerInput.includes('schedule')) {
-        const upcoming = appointments.filter(a => a.status === 'upcoming');
-        if (upcoming.length > 0) {
-          const next = upcoming[0];
-          responseContent = `Your next appointment is with ${next.providerName} on ${next.date} at ${next.time}.`;
-        } else {
-          responseContent = "You have no upcoming appointments scheduled. Would you like to book one from the Appointments page?";
-        }
-      } else if (lowerInput.includes('report') || lowerInput.includes('lab') || lowerInput.includes('test')) {
-        if (reports.length > 0) {
-          responseContent = `You have ${reports.length} reports in your file. Your latest one is "${reports[0].name}" from ${reports[0].reportDate}. You can view the full details and AI explanations in the Reports tab.`;
-        } else {
-          responseContent = "I don't see any uploaded lab reports. You can upload new reports in the Reports section.";
-        }
-      }
-
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: responseContent,
+        content: "I'm currently running in offline mode. My backend AI integration (LLM) has not been configured for this environment, so I cannot process your request right now. Please configure the AI API to enable real-time chat.",
         timestamp: new Date().toISOString(),
       };
       
       setMessages(prev => [...prev, aiMessage]);
       setIsTyping(false);
-    }, 1500);
+    }, 1000);
   };
 
   return (

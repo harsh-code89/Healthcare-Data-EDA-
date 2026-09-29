@@ -119,16 +119,8 @@ export function Appointments() {
 
                 <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100">
                   {tab === 'upcoming' ? (
-                    <>
-                      {appt.type === 'teleconsultation' && (
-                        <button className="co-btn co-btn-primary co-btn-sm flex-1">Join Call</button>
-                      )}
-                      <button className="co-btn co-btn-secondary co-btn-sm flex-1">Reschedule</button>
-                      <button className="co-btn co-btn-ghost co-btn-sm text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleCancel(appt.id)}>Cancel</button>
-                    </>
-                  ) : (
-                    <button className="co-btn co-btn-secondary co-btn-sm w-full">View Consultation Notes</button>
-                  )}
+                    <button className="co-btn co-btn-ghost co-btn-sm text-red-600 hover:text-red-700 hover:bg-red-50 ml-auto" onClick={() => handleCancel(appt.id)}>Cancel Appointment</button>
+                  ) : null}
                 </div>
               </div>
             </div>

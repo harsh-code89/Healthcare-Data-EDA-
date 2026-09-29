@@ -222,25 +222,10 @@ export function Reports() {
                 <p className="text-sm text-slate-500 mb-4">Report date: {selectedReport.reportDate}</p>
                 
                 <div className="prose prose-sm prose-slate max-w-none">
-                  <p className="whitespace-pre-line text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    {selectedReport.summary || "This report indicates a summary of your recent test. All core values appear to be within the standard reference range. We suggest showing this directly to your primary care physician during your next visit to discuss the detailed breakdown."}
-                  </p>
+                  <div className="whitespace-pre-line text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    {selectedReport.summary || "No AI explanation is currently available for this report. Please check back later or ensure the backend LLM service is connected."}
+                  </div>
                 </div>
-              </div>
-              
-              <div className="border-t border-slate-100 pt-6">
-                <h4 className="font-bold text-slate-800 mb-3">Questions to ask your doctor:</h4>
-                <ul className="space-y-2">
-                  <li className="flex items-start gap-2 text-sm text-slate-600">
-                    <span className="text-indigo-500 font-bold">•</span> Are any of these values concerning for my specific age group?
-                  </li>
-                  <li className="flex items-start gap-2 text-sm text-slate-600">
-                    <span className="text-indigo-500 font-bold">•</span> Should I make any dietary changes based on this?
-                  </li>
-                  <li className="flex items-start gap-2 text-sm text-slate-600">
-                    <span className="text-indigo-500 font-bold">•</span> When should I repeat this test?
-                  </li>
-                </ul>
               </div>
             </div>
             
