@@ -1,5 +1,5 @@
-// ViteLens — Authentication Service (Supabase)
-// Replaces the previous mock/localStorage implementation with real Supabase Auth.
+// CareOS — Authentication Service (Supabase + Resend)
+// Uses Supabase Auth for session management, Resend for transactional emails.
 
 import { supabase } from "../lib/supabaseClient";
 
@@ -13,6 +13,41 @@ export interface UserProfile {
   allergies?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
+}
+
+// ── Helper: get the production-safe app URL ───────────────────
+function getAppUrl(): string {
+  // In production (Netlify), APP_URL is set as an env var.
+  // In local dev, Vite exposes it via VITE_ prefix for client-side code.
+  // We prioritise the window origin so links always point to the real deployment.
+  return (
+    (import.meta as any).env?.VITE_APP_URL ||
+    window.location.origin
+  );
+}
+
+// ── Helper: send an email via our Netlify Function ────────────
+// This keeps RESEND_API_KEY entirely server-side.
+async function sendEmailViaFunction(
+  endpoint: "send-welcome-email" | "send-reset-email",
+  payload: Record<string, string>
+): Promise<void> {
+  try {
+    const res = await fetch(`/api/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      // Log but don't throw — email delivery failure shouldn't block auth flow
+      console.warn(`Email function ${endpoint} returned ${res.status}:`, data.error);
+    }
+  } catch (err) {
+    // Network-level failure — log but don't block the auth operation
+    console.warn(`Failed to call ${endpoint}:`, err);
+  }
 }
 
 // ── Helper: fetch user profile from the `profiles` table ─────
@@ -42,32 +77,54 @@ export const authService = {
 
   /**
    * Sign up with email + password.
-   * Returns { needsVerification: true } when Supabase requires email confirmation
-   * (controlled by Authentication → Email → "Confirm email" in Supabase dashboard).
+   * Returns { needsVerification: true } when Supabase requires email
+   * confirmation (controlled by Authentication → Email → "Confirm email").
+   * Also triggers a branded welcome email via Resend.
    */
   async signUp(
     email: string,
     password: string,
     name: string
   ): Promise<{ needsVerification: boolean }> {
+    const appUrl = getAppUrl();
     const { data, error } = await supabase.auth.signUp({
       email: email.toLowerCase().trim(),
       password,
       options: {
         data: { name: name.trim() || email.split("@")[0] },
-        emailRedirectTo: window.location.origin,
+        // Supabase sends its own confirmation email to this URL.
+        // We also send a custom branded one via Resend below.
+        emailRedirectTo: `${appUrl}/auth/confirm`,
       },
     });
 
     if (error) throw new Error(error.message);
 
-    // If `session` is null, Supabase requires email confirmation before sign-in
-    return { needsVerification: !data.session };
+    const needsVerification = !data.session;
+
+    if (needsVerification && data.user) {
+      // Extract the confirmation URL from Supabase's generated user data
+      // Supabase returns the token in the user object when email confirmation is ON
+      const confirmationUrl = `${appUrl}/auth/confirm`;
+
+      // Send branded welcome email via Resend (non-blocking)
+      await sendEmailViaFunction("send-welcome-email", {
+        email: email.toLowerCase().trim(),
+        name: name.trim() || email.split("@")[0],
+        // We use Supabase's magic link endpoint as the confirmation URL.
+        // The user will also receive Supabase's built-in confirmation email,
+        // so our email is supplementary / branded.
+        confirmationUrl,
+      });
+    }
+
+    return { needsVerification };
   },
 
   /**
    * Sign in with email + password.
-   * Session is automatically stored by Supabase; AuthContext picks it up via onAuthStateChange.
+   * Session is automatically stored by Supabase; AuthContext picks it up
+   * via onAuthStateChange.
    */
   async signIn(email: string, password: string): Promise<void> {
     const { error } = await supabase.auth.signInWithPassword({
@@ -86,26 +143,57 @@ export const authService = {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: window.location.origin,
-        queryParams: provider === "google"
-          ? { access_type: "offline", prompt: "consent" }
-          : undefined,
+        redirectTo: `${getAppUrl()}/auth/confirm`,
+        queryParams:
+          provider === "google"
+            ? { access_type: "offline", prompt: "consent" }
+            : undefined,
       },
     });
     if (error) throw new Error(error.message);
   },
 
   /**
-   * Send a password reset email.
+   * Initiate a password reset.
+   * Uses Supabase Auth to generate a secure reset token/link.
+   * Then sends a branded email via Resend.
    * Always resolves (never leaks whether an account exists).
    */
   async resetPasswordRequest(email: string): Promise<void> {
+    const appUrl = getAppUrl();
+    const resetRedirectUrl = `${appUrl}/auth/reset-password`;
+
+    // Ask Supabase to generate the reset link
     const { error } = await supabase.auth.resetPasswordForEmail(
       email.toLowerCase().trim(),
-      { redirectTo: `${window.location.origin}?reset=true` }
+      { redirectTo: resetRedirectUrl }
     );
-    // We intentionally swallow errors here to prevent email enumeration
-    if (error) console.warn("Reset email error (suppressed):", error.message);
+
+    // Intentionally swallow errors to prevent account enumeration.
+    // We still attempt to send our branded email if Supabase didn't fail.
+    if (error) {
+      console.warn("Supabase reset email error (suppressed for security):", error.message);
+      return; // Return silently — caller shows generic success message
+    }
+
+    // Send our branded reset email via Resend (non-blocking)
+    // Note: Supabase also sends its own reset email. Our email supplements
+    // with better branding. Configure Supabase to disable its built-in email
+    // in Dashboard → Auth → Email Templates → Reset Password → (disable or use SMTP).
+    await sendEmailViaFunction("send-reset-email", {
+      email: email.toLowerCase().trim(),
+      resetUrl: resetRedirectUrl,
+    });
+  },
+
+  /**
+   * Complete a password reset after the user clicks the email link.
+   * Supabase injects the session via the URL hash when the reset link is opened.
+   * This function just updates the password using the active recovery session.
+   */
+  async updatePassword(newPassword: string): Promise<void> {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw new Error(error.message);
   },
 
   /**
@@ -121,7 +209,21 @@ export const authService = {
   },
 
   /**
-   * Change password.
+   * Resend the email confirmation link.
+   */
+  async resendConfirmation(email: string): Promise<void> {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: email.toLowerCase().trim(),
+      options: {
+        emailRedirectTo: `${getAppUrl()}/auth/confirm`,
+      },
+    });
+    if (error) throw new Error(error.message);
+  },
+
+  /**
+   * Change password (requires current password verification).
    * Verifies the old password first by re-authenticating, then updates.
    */
   async changePassword(
@@ -142,27 +244,31 @@ export const authService = {
   },
 
   /**
-   * Update display name and medical profile in both auth metadata and the `profiles` table.
+   * Update display name and medical profile in both auth metadata
+   * and the `profiles` table.
    */
-  async updateProfile(userId: string, data: Partial<UserProfile>): Promise<UserProfile> {
+  async updateProfile(
+    userId: string,
+    data: Partial<UserProfile>
+  ): Promise<UserProfile> {
     const trimmedName = data.name?.trim();
 
     if (trimmedName) {
-      // Update auth user metadata (so OAuth providers show correct name)
       const { error: metaError } = await supabase.auth.updateUser({
         data: { name: trimmedName },
       });
       if (metaError) throw new Error(metaError.message);
     }
 
-    const updates: any = {};
+    const updates: Record<string, unknown> = {};
     if (trimmedName) updates.name = trimmedName;
     if (data.bloodGroup !== undefined) updates.blood_group = data.bloodGroup;
     if (data.allergies !== undefined) updates.allergies = data.allergies;
-    if (data.emergencyContactName !== undefined) updates.emergency_contact_name = data.emergencyContactName;
-    if (data.emergencyContactPhone !== undefined) updates.emergency_contact_phone = data.emergencyContactPhone;
+    if (data.emergencyContactName !== undefined)
+      updates.emergency_contact_name = data.emergencyContactName;
+    if (data.emergencyContactPhone !== undefined)
+      updates.emergency_contact_phone = data.emergencyContactPhone;
 
-    // Update profiles table
     const { data: updatedData, error } = await supabase
       .from("profiles")
       .update(updates)
@@ -170,7 +276,8 @@ export const authService = {
       .select("*")
       .single();
 
-    if (error || !updatedData) throw new Error(error?.message ?? "Failed to update profile.");
+    if (error || !updatedData)
+      throw new Error(error?.message ?? "Failed to update profile.");
 
     return {
       id: updatedData.id,

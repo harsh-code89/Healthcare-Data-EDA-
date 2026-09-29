@@ -5,9 +5,25 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# Netlify Functions directory
+[functions]
+  directory         = "netlify/functions"
+  node_bundler      = "esbuild"
+
 [secrets_scanning]
   enabled = true
   omit_keys = ["VITE_SUPABASE_ANON_KEY", "VITE_SUPABASE_URL"]
+
+# API routes — served by Netlify Functions
+[[redirects]]
+  from   = "/api/send-welcome-email"
+  to     = "/.netlify/functions/send-welcome-email"
+  status = 200
+
+[[redirects]]
+  from   = "/api/send-reset-email"
+  to     = "/.netlify/functions/send-reset-email"
+  status = 200
 
 # SPA fallback — serve index.html for every route
 [[redirects]]

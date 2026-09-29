@@ -9,6 +9,10 @@ import { DashboardShell } from './components/layout/DashboardShell';
 import { LandingPage } from './pages/landing/LandingPage';
 import { AuthPage, type AuthMode } from './components/AuthPage';
 
+// Auth callback pages
+import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
+import { ConfirmEmailPage } from './pages/auth/ConfirmEmailPage';
+
 // Patient Pages
 import { Dashboard as PatientDashboard } from './pages/patient/Dashboard';
 import { HealthRecord } from './pages/patient/HealthRecord';
@@ -39,56 +43,64 @@ function AppRouter() {
     );
   }
 
-  // Show Auth Page if explicitly requested and not authenticated
-  if (showAuth && !isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col relative">
-        <button 
-          onClick={() => setShowAuth(false)}
-          className="absolute top-4 left-4 p-2 text-slate-500 hover:bg-slate-200 rounded-md transition-colors z-10 font-medium text-sm"
-        >
-          ← Back to site
-        </button>
-        <AuthPage 
-          mode={authMode} 
-          onModeChange={(mode) => setAuthMode(mode || 'sign-in')}
-          onSuccess={() => setShowAuth(false)}
-        />
-      </div>
-    );
-  }
-
-  // Unauthenticated -> Landing Page
-  if (!isAuthenticated) {
-    return (
-      <Routes>
-        <Route path="*" element={
-          <LandingPage 
-            onGetStarted={() => { setShowAuth(true); setAuthMode('sign-up'); }} 
-            onSignIn={() => { setShowAuth(true); setAuthMode('sign-in'); }} 
-          />
-        } />
-      </Routes>
-    );
-  }
-
-  // Authenticated -> Dashboard Routes
   return (
     <Routes>
-      <Route element={<DashboardShell />}>
-        <Route path="/" element={<PatientDashboard />} />
-        <Route path="/health-record" element={<HealthRecord />} />
-        <Route path="/timeline" element={<Timeline />} />
-        <Route path="/appointments" element={<Appointments />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/medications" element={<Medications />} />
-        <Route path="/ai-assistant" element={<AIAssistant />} />
-        <Route path="/care-team" element={<CareTeam />} />
-        <Route path="/family" element={<Family />} />
-        <Route path="/emergency" element={<EmergencyProfile />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
+      {/* ── Auth callback routes (always accessible) ─── */}
+      {/* These handle Supabase's redirect-based auth flows */}
+      <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/auth/confirm" element={<ConfirmEmailPage />} />
+
+      {/* ── Authenticated routes ──────────────────────── */}
+      {isAuthenticated ? (
+        <Route element={<DashboardShell />}>
+          <Route path="/" element={<PatientDashboard />} />
+          <Route path="/health-record" element={<HealthRecord />} />
+          <Route path="/timeline" element={<Timeline />} />
+          <Route path="/appointments" element={<Appointments />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/medications" element={<Medications />} />
+          <Route path="/ai-assistant" element={<AIAssistant />} />
+          <Route path="/care-team" element={<CareTeam />} />
+          <Route path="/family" element={<Family />} />
+          <Route path="/emergency" element={<EmergencyProfile />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      ) : (
+        /* ── Unauthenticated routes ────────────────────── */
+        <>
+          {showAuth ? (
+            <Route
+              path="*"
+              element={
+                <div className="min-h-screen bg-slate-50 flex flex-col relative">
+                  <button
+                    onClick={() => setShowAuth(false)}
+                    className="absolute top-4 left-4 p-2 text-slate-500 hover:bg-slate-200 rounded-md transition-colors z-10 font-medium text-sm"
+                  >
+                    ← Back to site
+                  </button>
+                  <AuthPage
+                    mode={authMode}
+                    onModeChange={(mode) => setAuthMode(mode || 'sign-in')}
+                    onSuccess={() => setShowAuth(false)}
+                  />
+                </div>
+              }
+            />
+          ) : (
+            <Route
+              path="*"
+              element={
+                <LandingPage
+                  onGetStarted={() => { setShowAuth(true); setAuthMode('sign-up'); }}
+                  onSignIn={() => { setShowAuth(true); setAuthMode('sign-in'); }}
+                />
+              }
+            />
+          )}
+        </>
+      )}
     </Routes>
   );
 }

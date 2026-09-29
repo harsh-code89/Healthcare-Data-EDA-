@@ -70,26 +70,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // ── 1. Restore session on page load ──────────────────────
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        await resolveUser(session.user as Parameters<typeof resolveUser>[0]);
+        // Don't auto-sign-in during PASSWORD_RECOVERY flow.
+        // The reset password page handles the session itself.
+        const hash = window.location.hash;
+        const isRecovery =
+          hash.includes("type=recovery") || window.location.pathname === "/auth/reset-password";
+
+        if (!isRecovery) {
+          await resolveUser(session.user as Parameters<typeof resolveUser>[0]);
+        }
       }
       setIsLoading(false);
     });
 
     // ── 2. Subscribe to all future auth state changes ────────
-    // This fires for: SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED,
-    //                 PASSWORD_RECOVERY, USER_UPDATED
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        // Don't set user state during password recovery.
+        // The ResetPasswordPage handles this flow.
+        setIsLoading(false);
+        return;
+      }
+
       if (session?.user) {
         await resolveUser(session.user as Parameters<typeof resolveUser>[0]);
-
-        if (event === "PASSWORD_RECOVERY") {
-          showToast(
-            "You can now set a new password in Account Settings.",
-            "info"
-          );
-        }
       } else {
         setUser(null);
       }

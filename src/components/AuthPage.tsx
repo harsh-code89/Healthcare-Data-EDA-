@@ -17,6 +17,7 @@ import {
   Loader2,
   Github,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 
 export type AuthMode = "sign-in" | "sign-up" | "reset" | "otp";
@@ -38,8 +39,11 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
   const [showPassword, setShowPassword] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   // After sign-up with email verification enabled in Supabase
   const [awaitingVerification, setAwaitingVerification] = useState(false);
+  // Tracks if the reset request was sent
+  const [resetSent, setResetSent] = useState(false);
 
   const isReset = mode === "reset";
   const isSignUp = mode === "sign-up";
@@ -69,11 +73,13 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
         if (needsVerification) {
           // Supabase "Confirm email" setting is ON — user must click email link first
           setAwaitingVerification(true);
-          showToast("Check your inbox and click the confirmation link.", "info");
+          showToast(
+            "Check your inbox and click the confirmation link to activate your account.",
+            "info"
+          );
         } else {
           // Email confirmation is OFF in Supabase — user is auto-logged in
           showToast(`Welcome to CareOS! 🎉`, "success");
-          // Notify parent to redirect to dashboard
           onSuccess?.();
         }
       }
@@ -81,21 +87,18 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
       // ── Sign in ───────────────────────────────────────────
       else if (mode === "sign-in") {
         await authService.signIn(email, password);
-        // Session is stored automatically by Supabase SDK
-        // AuthContext's onAuthStateChange picks it up and sets user state
         showToast("Signed in successfully. Welcome back!", "success");
-        // Notify parent to redirect to dashboard
         onSuccess?.();
       }
 
       // ── Forgot password ───────────────────────────────────
       else if (mode === "reset") {
         await authService.resetPasswordRequest(email);
+        setResetSent(true);
         showToast(
           "If an account exists for that email, a reset link is on its way.",
           "success"
         );
-        onModeChange("sign-in");
       }
 
       // ── OTP verification ──────────────────────────────────
@@ -117,13 +120,10 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
   async function handleSocialLogin(provider: "google" | "github") {
     setIsLoading(true);
     try {
-      // Redirects the browser to the OAuth provider.
-      // On return, Supabase handles the callback and fires onAuthStateChange.
       await authService.socialSignIn(provider);
       // Note: execution doesn't continue here because the browser navigates away.
     } catch (err) {
       const message = err instanceof Error ? err.message : `Failed to sign in with ${provider}.`;
-      // Detect common OAuth misconfiguration errors
       if (
         message.toLowerCase().includes("redirect") ||
         message.toLowerCase().includes("uri") ||
@@ -131,13 +131,29 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
         message.toLowerCase().includes("provider")
       ) {
         showToast(
-          `⚠️ Google OAuth isn’t configured yet. Please set up the redirect URI in Google Cloud Console and Supabase. Use email/password sign-in for now.`,
+          `⚠️ ${provider === "google" ? "Google" : "GitHub"} OAuth isn't configured yet. Use email/password sign-in for now.`,
           "error"
         );
       } else {
         showToast(message, "error");
       }
       setIsLoading(false);
+    }
+  }
+
+  async function handleResendConfirmation() {
+    if (!email || isResending) return;
+    setIsResending(true);
+    try {
+      await authService.resendConfirmation(email);
+      showToast("Confirmation email resent. Check your inbox.", "success");
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to resend. Please try again.",
+        "error"
+      );
+    } finally {
+      setIsResending(false);
     }
   }
 
@@ -151,38 +167,108 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
           <div className="auth-art-grid" />
         </div>
         <div className="auth-panel">
-          <div className="auth-brand"><span className="security-brand-mark" /><span>CareOS</span></div>
+          <div className="auth-brand">
+            <span className="security-brand-mark" />
+            <span>CareOS</span>
+          </div>
 
           <div style={{ textAlign: "center", padding: "24px 0" }}>
-            <div style={{
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              width: 64, height: 64, borderRadius: "50%",
-              background: "var(--surface)", border: "1px solid var(--border)", marginBottom: 20,
-            }}>
-              <MailCheck className="h-7 w-7" style={{ color: "var(--cyan)" }} />
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 72,
+                height: 72,
+                borderRadius: "50%",
+                background: "var(--surface)",
+                border: "2px solid var(--cyan)",
+                marginBottom: 20,
+              }}
+            >
+              <MailCheck className="h-8 w-8" style={{ color: "var(--cyan)" }} />
             </div>
-            <h1 style={{ fontSize: "22px", fontWeight: 700, margin: "0 0 12px", color: "var(--fg)" }}>
+            <h1
+              style={{
+                fontSize: "22px",
+                fontWeight: 700,
+                margin: "0 0 12px",
+                color: "var(--fg)",
+              }}
+            >
               Check your inbox
             </h1>
-            <p style={{ color: "var(--fg-muted)", fontSize: "14px", lineHeight: 1.7, margin: "0 0 24px" }}>
-              We sent a confirmation link to <strong style={{ color: "var(--fg)" }}>{email}</strong>.
-              Click the link in that email to activate your account.
+            <p
+              style={{
+                color: "var(--fg-muted)",
+                fontSize: "14px",
+                lineHeight: 1.7,
+                margin: "0 0 8px",
+              }}
+            >
+              We sent a confirmation link to{" "}
+              <strong style={{ color: "var(--fg)" }}>{email}</strong>.
             </p>
-            <p style={{ color: "var(--fg-muted)", fontSize: "13px", lineHeight: 1.6 }}>
-              Didn't receive it? Check your spam folder, or{" "}
+            <p
+              style={{
+                color: "var(--fg-muted)",
+                fontSize: "14px",
+                lineHeight: 1.7,
+                margin: "0 0 24px",
+              }}
+            >
+              Click the link in that email to activate your account.
+              The link is valid for <strong style={{ color: "var(--fg)" }}>24 hours</strong>.
+            </p>
+
+            {/* Resend button */}
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={handleResendConfirmation}
+              disabled={isResending}
+              style={{ width: "100%", justifyContent: "center", marginBottom: 8 }}
+            >
+              {isResending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {isResending ? "Sending…" : "Resend confirmation email"}
+            </button>
+
+            <p
+              style={{
+                color: "var(--fg-muted)",
+                fontSize: "13px",
+                lineHeight: 1.6,
+                marginTop: 12,
+              }}
+            >
+              Wrong email?{" "}
               <button
                 type="button"
-                style={{ color: "var(--fg)", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                onClick={() => { setAwaitingVerification(false); onModeChange("sign-up"); }}
+                style={{
+                  color: "var(--fg)",
+                  textDecoration: "underline",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+                onClick={() => {
+                  setAwaitingVerification(false);
+                  onModeChange("sign-up");
+                }}
               >
-                try a different email
-              </button>.
+                Try a different email
+              </button>
             </p>
           </div>
 
           <div className="auth-trust" style={{ marginTop: "24px" }}>
             <ShieldCheck className="h-3.5 w-3.5" />
-            <span>Secure email confirmation via Supabase Auth</span>
+            <span>Secure email confirmation · End-to-end encrypted</span>
             <Check className="h-3.5 w-3.5" />
           </div>
 
@@ -190,7 +276,107 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
             type="button"
             className="btn btn-ghost btn-sm"
             style={{ marginTop: 16, width: "100%", justifyContent: "center" }}
-            onClick={() => { setAwaitingVerification(false); onModeChange("sign-in"); }}
+            onClick={() => {
+              setAwaitingVerification(false);
+              onModeChange("sign-in");
+            }}
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Reset email sent confirmation screen ────────────────────
+  if (resetSent && mode === "reset") {
+    return (
+      <div className="auth-screen">
+        <div className="auth-art" aria-hidden="true">
+          <div className="auth-art-orb auth-art-orb-one" />
+          <div className="auth-art-orb auth-art-orb-two" />
+          <div className="auth-art-grid" />
+        </div>
+        <div className="auth-panel">
+          <div className="auth-brand">
+            <span className="security-brand-mark" />
+            <span>CareOS</span>
+          </div>
+
+          <div style={{ textAlign: "center", padding: "24px 0" }}>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 72,
+                height: 72,
+                borderRadius: "50%",
+                background: "var(--surface)",
+                border: "2px solid var(--cyan)",
+                marginBottom: 20,
+              }}
+            >
+              <MailCheck className="h-8 w-8" style={{ color: "var(--cyan)" }} />
+            </div>
+            <h1
+              style={{
+                fontSize: "22px",
+                fontWeight: 700,
+                margin: "0 0 12px",
+                color: "var(--fg)",
+              }}
+            >
+              Check your email
+            </h1>
+            <p
+              style={{
+                color: "var(--fg-muted)",
+                fontSize: "14px",
+                lineHeight: 1.7,
+                margin: "0 0 24px",
+              }}
+            >
+              If a CareOS account exists for{" "}
+              <strong style={{ color: "var(--fg)" }}>{email}</strong>,
+              we've sent a password reset link. It's valid for{" "}
+              <strong style={{ color: "var(--fg)" }}>1 hour</strong>.
+            </p>
+            <p
+              style={{
+                color: "var(--fg-muted)",
+                fontSize: "13px",
+                lineHeight: 1.6,
+                margin: "0 0 24px",
+              }}
+            >
+              Don't see it? Check your spam folder or try requesting another link.
+            </p>
+            <button
+              className="btn btn-outline"
+              onClick={() => {
+                setResetSent(false);
+              }}
+              style={{ width: "100%", justifyContent: "center", marginBottom: 8 }}
+            >
+              <RefreshCw className="h-4 w-4" /> Request another link
+            </button>
+          </div>
+
+          <div className="auth-trust" style={{ marginTop: "8px" }}>
+            <ShieldCheck className="h-3.5 w-3.5" />
+            <span>Secure reset via Supabase Auth</span>
+            <Check className="h-3.5 w-3.5" />
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ marginTop: 16, width: "100%", justifyContent: "center" }}
+            onClick={() => {
+              setResetSent(false);
+              onModeChange("sign-in");
+            }}
           >
             <ArrowLeft className="h-4 w-4" /> Back to sign in
           </button>
@@ -207,10 +393,15 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
         <div className="auth-art-orb auth-art-orb-two" />
         <div className="auth-art-grid" />
         <div className="auth-art-card auth-art-card-one">
-          <span>End-to-end</span><strong>Encrypted</strong><i />
+          <span>End-to-end</span>
+          <strong>Encrypted</strong>
+          <i />
         </div>
         <div className="auth-art-card auth-art-card-two">
-          <span><span className="auth-art-live" /> Data</span><strong>Protected</strong>
+          <span>
+            <span className="auth-art-live" /> Data
+          </span>
+          <strong>Protected</strong>
         </div>
       </div>
 
@@ -228,7 +419,7 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
             {isOtp
               ? "Verify your email."
               : isReset
-              ? "Reset your access."
+              ? "Reset your password."
               : isSignUp
               ? "Create your account."
               : "Welcome back."}
@@ -237,7 +428,7 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
             {isOtp
               ? `Enter the verification code sent to ${email}.`
               : isReset
-              ? "Enter your email and we'll send a secure reset link."
+              ? "Enter your email and we'll send a secure, time-limited reset link."
               : "Your health records, appointments, medications and care team — all in one secure place."}
           </p>
         </div>
@@ -254,14 +445,29 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
                 style={{ width: "100%", justifyContent: "center" }}
               >
                 <svg
-                  width="16" height="16" viewBox="0 0 24 24" fill="none"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
                   xmlns="http://www.w3.org/2000/svg"
                   style={{ marginRight: 8 }}
                 >
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                  <path
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    fill="#4285F4"
+                  />
+                  <path
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    fill="#34A853"
+                  />
+                  <path
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                    fill="#FBBC05"
+                  />
+                  <path
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                    fill="#EA4335"
+                  />
                 </svg>
                 Google
               </button>
@@ -275,21 +481,35 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
                 <Github className="h-4 w-4" style={{ marginRight: 8 }} /> GitHub
               </button>
             </div>
-            <div className="auth-divider"><span>or continue with email</span></div>
+            <div className="auth-divider">
+              <span>or continue with email</span>
+            </div>
           </>
         )}
 
-        {/* Supabase misconfiguration warning — only visible when env vars are missing */}
+        {/* Supabase misconfiguration warning */}
         {!isSupabaseConfigured && (
-          <div style={{
-            display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px",
-            background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, marginBottom: 16,
-          }}>
-            <AlertTriangle className="h-4 w-4 shrink-0" style={{ color: "#dc2626", marginTop: 2 }} />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+              padding: "12px 14px",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: 10,
+              marginBottom: 16,
+            }}
+          >
+            <AlertTriangle
+              className="h-4 w-4 shrink-0"
+              style={{ color: "#dc2626", marginTop: 2 }}
+            />
             <div style={{ fontSize: 13, color: "#991b1b", lineHeight: 1.5 }}>
               <strong>Configuration error:</strong> This app is not connected to a database.
-              The <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> environment
-              variables must be set in your Netlify dashboard before sign-up or sign-in will work.
+              The <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>{" "}
+              environment variables must be set in your Netlify dashboard before sign-up or
+              sign-in will work.
             </div>
           </div>
         )}
@@ -322,7 +542,7 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@company.com"
+                    placeholder="you@example.com"
                     autoComplete="email"
                     required
                     disabled={isLoading}
@@ -332,7 +552,9 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
 
               {!isReset && (
                 <label>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div
+                    style={{ display: "flex", justifyContent: "space-between" }}
+                  >
                     <span>Password</span>
                     {!isSignUp && (
                       <button
@@ -359,7 +581,14 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
                     <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-muted)", padding: "0 4px", fontSize: "11px" }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "var(--fg-muted)",
+                        padding: "0 4px",
+                        fontSize: "11px",
+                      }}
                     >
                       {showPassword ? "hide" : "show"}
                     </button>
@@ -383,6 +612,11 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
                       disabled={isLoading}
                     />
                   </div>
+                  {password && confirmPassword && password !== confirmPassword && (
+                    <p style={{ color: "var(--error, #ef4444)", fontSize: "12px", marginTop: 4 }}>
+                      Passwords do not match.
+                    </p>
+                  )}
                 </label>
               )}
             </>
@@ -428,11 +662,22 @@ export function AuthPage({ mode, onModeChange, onSuccess }: AuthPageProps) {
         {/* Footer switch */}
         <div className="auth-switch">
           {isReset ? (
-            <button type="button" onClick={() => onModeChange("sign-in")} disabled={isLoading}>
+            <button
+              type="button"
+              onClick={() => {
+                setResetSent(false);
+                onModeChange("sign-in");
+              }}
+              disabled={isLoading}
+            >
               Back to sign in
             </button>
           ) : isOtp ? (
-            <button type="button" onClick={() => onModeChange("sign-up")} disabled={isLoading}>
+            <button
+              type="button"
+              onClick={() => onModeChange("sign-up")}
+              disabled={isLoading}
+            >
               Use a different email
             </button>
           ) : (
