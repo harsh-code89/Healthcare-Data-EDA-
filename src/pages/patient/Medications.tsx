@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Pill, Plus, Clock, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Pill, Plus, Clock, AlertCircle, Sparkles } from 'lucide-react';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { usePatientData } from '../../hooks/usePatientData';
 import { patientService } from '../../services/patientService';
 
 export function Medications() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<'active' | 'past'>('active');
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -126,7 +128,17 @@ export function Medications() {
                   <div className="text-xs text-slate-400">
                     Started: {med.startDate} {med.endDate ? ` • Ended: ${med.endDate}` : ''}
                   </div>
-                  {/* Removed fake reminder toggle to comply with no mock feature rule */}
+                  <button
+                    onClick={() => navigate('/ai-assistant', {
+                      state: {
+                        initialPrompt: `Please conduct a comprehensive pharmacology and safety analysis for my medication: ${med.name} (${med.dosage}, frequency: ${med.frequency.replace('_', ' ')}). Cover mechanism of action, clinical evidence, important side effects, drug interactions, long-term safety, and Indian vs international approval status.`
+                      }
+                    })}
+                    className="co-btn co-btn-secondary co-btn-sm text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-200 flex items-center gap-1.5"
+                    title="Research this medication with CareOS AI"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-indigo-600" /> Research with AI
+                  </button>
                 </div>
               </div>
             </div>

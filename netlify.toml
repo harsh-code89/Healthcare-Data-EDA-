@@ -25,6 +25,11 @@
   to     = "/.netlify/functions/send-reset-email"
   status = 200
 
+[[redirects]]
+  from   = "/api/ai-health-chat"
+  to     = "/.netlify/functions/ai-health-chat"
+  status = 200
+
 # SPA fallback — serve index.html for every route
 [[redirects]]
   from   = "/*"

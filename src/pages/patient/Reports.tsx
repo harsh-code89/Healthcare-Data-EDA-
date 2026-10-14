@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { UploadCloud, FileBarChart2, Download, Eye, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { UploadCloud, FileBarChart2, Download, Eye, Sparkles, MessageSquare } from 'lucide-react';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { AIDisclaimer } from '../../components/shared/AIDisclaimer';
 import { usePatientData } from '../../hooks/usePatientData';
 import { patientService } from '../../services/patientService';
 
 export function Reports() {
+  const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedReport, setSelectedReport] = useState<any | null>(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -128,7 +130,7 @@ export function Reports() {
                 )}
               </div>
               
-              <div className="co-card-footer flex justify-between gap-2 bg-slate-50">
+              <div className="co-card-footer flex justify-between gap-2 bg-slate-50 items-center">
                 <div className="flex gap-2">
                   {report.fileUrl ? (
                     <a href={report.fileUrl} target="_blank" rel="noreferrer" className="co-btn co-btn-secondary co-btn-sm" title="View"><Eye className="h-4 w-4" /></a>
@@ -139,11 +141,24 @@ export function Reports() {
                     <a href={report.fileUrl} download className="co-btn co-btn-secondary co-btn-sm" title="Download"><Download className="h-4 w-4" /></a>
                   )}
                 </div>
-                {report.isAIExplained && (
-                  <button onClick={() => setSelectedReport(report)} className="co-btn co-btn-primary co-btn-sm bg-indigo-600 hover:bg-indigo-700">
-                    <Sparkles className="h-3.5 w-3.5" /> Explain
+                <div className="flex gap-2">
+                  {report.isAIExplained && (
+                    <button onClick={() => setSelectedReport(report)} className="co-btn co-btn-secondary co-btn-sm text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-200">
+                      <Sparkles className="h-3.5 w-3.5 text-indigo-600" /> Summary
+                    </button>
+                  )}
+                  <button
+                    onClick={() => navigate('/ai-assistant', {
+                      state: {
+                        initialPrompt: `Please analyze my ${labels[report.category] || report.category} report: "${report.name}" (Date: ${report.reportDate}${report.labName ? `, Lab: ${report.labName}` : ''}). What does this test measure, what are normal reference ranges, what clinical implications should I discuss with my doctor, and what lifestyle or follow-up steps are evidence-based?`
+                      }
+                    })}
+                    className="co-btn co-btn-primary co-btn-sm bg-indigo-600 hover:bg-indigo-700"
+                    title="Ask CareOS AI about this report"
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" /> Ask AI
                   </button>
-                )}
+                </div>
               </div>
             </div>
           ))}
@@ -229,7 +244,21 @@ export function Reports() {
               </div>
             </div>
             
-            <div className="p-4 border-t border-slate-100 bg-white">
+            <div className="p-4 border-t border-slate-100 bg-white space-y-2">
+              <button
+                className="co-btn co-btn-secondary w-full justify-center text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-200 flex items-center gap-1.5"
+                onClick={() => {
+                  const rep = selectedReport;
+                  setSelectedReport(null);
+                  navigate('/ai-assistant', {
+                    state: {
+                      initialPrompt: `Please provide a deeper health intelligence analysis of my report "${rep.name}" dated ${rep.reportDate}${rep.labName ? ` from ${rep.labName}` : ''}. What are the critical markers to watch, related pharmacological or dietary considerations, and questions to ask my specialist?`
+                    }
+                  });
+                }}
+              >
+                <Sparkles className="h-4 w-4" /> Ask CareOS AI follow-up questions
+              </button>
               <button className="co-btn co-btn-primary w-full justify-center" onClick={() => setSelectedReport(null)}>
                 Got it, thanks
               </button>
