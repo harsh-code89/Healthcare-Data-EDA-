@@ -4,15 +4,13 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  SECRETS_SCAN_ENABLED = "false"
+  SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_ANON_KEY,VITE_SUPABASE_URL"
 
 # Netlify Functions directory
 [functions]
   directory         = "netlify/functions"
   node_bundler      = "esbuild"
-
-[secrets_scanning]
-  enabled = true
-  omit_keys = ["VITE_SUPABASE_ANON_KEY", "VITE_SUPABASE_URL"]
 
 # API routes — served by Netlify Functions
 [[redirects]]

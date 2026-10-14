@@ -1,1 +1,4 @@
-/*    /index.html   200
+/api/send-welcome-email   /.netlify/functions/send-welcome-email   200
+/api/send-reset-email     /.netlify/functions/send-reset-email     200
+/api/ai-health-chat       /.netlify/functions/ai-health-chat       200
+/*                        /index.html                             200
