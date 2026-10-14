@@ -340,12 +340,21 @@ export function AIAssistant() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
+        let errorMessage = data.message || 'Something went wrong. Please try again.';
+        if (typeof errorMessage === 'string' && (errorMessage.includes('{"error"') || errorMessage.startsWith('{'))) {
+          try {
+            const jsonPart = errorMessage.substring(errorMessage.indexOf('{'));
+            const parsed = JSON.parse(jsonPart);
+            errorMessage = parsed.error?.message || errorMessage;
+          } catch {}
+        }
+
         setMessages(prev => [
           ...prev,
           {
             id: (Date.now() + 1).toString(),
             role: 'assistant',
-            content: data.message || 'Something went wrong. Please try again.',
+            content: errorMessage,
             timestamp: new Date().toISOString(),
             isError: true,
           },
