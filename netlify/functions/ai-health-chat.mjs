@@ -8,12 +8,18 @@
  * Security:
  *   - GEMINI_API_KEY is server-side only, never exposed to the client.
  *   - User messages are validated and length-limited.
- *   - Rate limiting awareness via response headers.
- *   - No PII is logged.
+ *   - Automatic model fallback (gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-flash).
+ *   - Clean error reporting to identify configuration or quota issues.
  */
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const MODEL = "gemini-2.0-flash"; // Fast, capable, free-tier eligible
+
+// Candidate models in preference order (supports new and existing Gemini tiers)
+const CANDIDATE_MODELS = [
+  "gemini-2.0-flash",
+  "gemini-2.5-flash",
+  "gemini-1.5-flash",
+];
 
 // ── CareOS AI System Prompt ────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are CareOS AI — an advanced AI-powered health intelligence, pharmacology research, preventive health, and longevity analysis assistant built into the CareOS platform, a digital health record system for India.
@@ -68,41 +74,18 @@ CRITICAL: Never state that something is safe or effective in humans based solely
 - NEVER recommend specific treatment regimens, dose changes, or stopping prescription medicines.
 - NEVER fabricate citations, trial IDs, drug approvals, or research results.
 - Recognize emergency symptoms and provide emergency guidance (India: 112, AIIMS Poison helpline: 1800-11-6117).
-- For prescription drugs: explain uses and risks but emphasize they require a qualified prescriber.
+- For acute symptoms (like sudden high fever, chest pain, shortness of breath), recommend evaluating warning signs that warrant immediate clinical attention.
 
-**Tone:** Precise, intellectually honest, scientifically literate, accessible. Define specialist terms. Direct about uncertainty — never hide gaps behind confident language.
-
-## Response Format for Medicine Research
-
-For substantial medicine evaluations, use this structure:
-1. **Identity** — Generic name, drug class, mechanism
-2. **Status in India** — CDSCO approval status, availability, prescription requirement
-3. **International status** — FDA/EMA/WHO status
-4. **Evidence level** — Use the classification system above
-5. **Potential benefits** — Established vs. experimental, clearly separated
-6. **Safety profile** — Common adverse effects, serious risks, contraindications, interactions
-7. **Independent use assessment** — What could happen without medical supervision
-8. **Better alternatives** — Established options for the same goal
-9. **Practical conclusion** — What is known, unknown, and what action is reasonable
-
-## Personal Health Context
-
-When a user shares their health context (medications, conditions, test results from their CareOS records), use it to make explanations more relevant. Always remind them to confirm specifics with their doctor.
-
-## Current limitations
-- You do not have real-time internet access. Your knowledge has a training cutoff. For the most current drug approvals or trial results, recommend checking ClinicalTrials.gov, PubMed, or the CDSCO website directly.
-- You cannot access the user's actual medical records unless they are explicitly shared in the conversation.
-- Do not invent or hallucinate specific clinical trial numbers, study results, or drug approval dates.`;
+**Tone:** Precise, intellectually honest, scientifically literate, accessible. Define specialist terms. Direct about uncertainty.`;
 
 // ── Input sanitization ─────────────────────────────────────────────────────
 function sanitizeMessage(text) {
   if (typeof text !== "string") return "";
-  return text.trim().substring(0, 8000); // Cap individual message length
+  return text.trim().substring(0, 8000);
 }
 
-// ── Build Gemini API payload ───────────────────────────────────────────────
+// ── Build Gemini API payload (Strict REST schema compliance) ────────────────
 function buildGeminiPayload(messages, userContext) {
-  // Build context injection from user's health data
   let contextBlock = "";
   if (userContext && Object.keys(userContext).length > 0) {
     const parts = [];
@@ -124,14 +107,15 @@ function buildGeminiPayload(messages, userContext) {
     }
   }
 
-  // Build the contents array for Gemini
+  // Build the contents array
   const contents = messages.map((msg) => ({
     role: msg.role === "assistant" ? "model" : "user",
     parts: [{ text: sanitizeMessage(msg.content) }],
   }));
 
+  // Note: REST API strictly expects camelCase systemInstruction
   return {
-    system_instruction: {
+    systemInstruction: {
       parts: [{ text: SYSTEM_PROMPT + contextBlock }],
     },
     contents,
@@ -140,14 +124,7 @@ function buildGeminiPayload(messages, userContext) {
       topK: 40,
       topP: 0.95,
       maxOutputTokens: 4096,
-      responseMimeType: "text/plain",
     },
-    safetySettings: [
-      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
-    ],
   };
 }
 
@@ -173,12 +150,12 @@ export default async function handler(req, context) {
   }
 
   if (!GEMINI_API_KEY) {
-    console.error("GEMINI_API_KEY is not configured");
+    console.error("GEMINI_API_KEY is not configured in Netlify");
     return new Response(
       JSON.stringify({
         error: "AI service not configured",
         message:
-          "The GEMINI_API_KEY environment variable is not set. Please configure it in your Netlify dashboard.",
+          "The GEMINI_API_KEY environment variable is missing. Please add it in your Netlify dashboard under Site configuration → Environment variables.",
       }),
       { status: 503, headers: { "Content-Type": "application/json" } }
     );
@@ -196,7 +173,6 @@ export default async function handler(req, context) {
 
   const { messages, userContext } = body;
 
-  // Validate messages
   if (!Array.isArray(messages) || messages.length === 0) {
     return new Response(
       JSON.stringify({ error: "messages must be a non-empty array" }),
@@ -204,10 +180,7 @@ export default async function handler(req, context) {
     );
   }
 
-  // Limit conversation history length (last 20 messages max)
   const trimmedMessages = messages.slice(-20);
-
-  // Validate each message
   for (const msg of trimmedMessages) {
     if (!["user", "assistant"].includes(msg.role) || typeof msg.content !== "string") {
       return new Response(
@@ -217,103 +190,137 @@ export default async function handler(req, context) {
     }
   }
 
-  try {
-    const payload = buildGeminiPayload(trimmedMessages, userContext || {});
+  const payload = buildGeminiPayload(trimmedMessages, userContext || {});
+  let lastErrorText = "";
+  let lastStatus = 502;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  // Try candidate models in order of priority (automatic fallback)
+  for (const model of CANDIDATE_MODELS) {
+    try {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY.trim()}`;
 
-    const geminiRes = await fetch(geminiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+      const geminiRes = await fetch(geminiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": GEMINI_API_KEY.trim(),
+        },
+        body: JSON.stringify(payload),
+      });
 
-    if (!geminiRes.ok) {
-      const errBody = await geminiRes.text();
-      console.error("Gemini API error:", geminiRes.status, errBody.substring(0, 500));
+      if (!geminiRes.ok) {
+        lastStatus = geminiRes.status;
+        lastErrorText = await geminiRes.text();
+        console.warn(`Model ${model} returned ${geminiRes.status}:`, lastErrorText.substring(0, 300));
+        
+        // If 404 (model deprecated or not available in region), try next model in loop
+        if (geminiRes.status === 404) {
+          continue;
+        }
 
-      // Handle quota exceeded specifically
-      if (geminiRes.status === 429) {
+        // Parse error details from Google API
+        let parsed = null;
+        try { parsed = JSON.parse(lastErrorText); } catch {}
+        
+        const apiErrorReason = parsed?.error?.details?.[0]?.reason || "";
+        const apiErrorMessage = parsed?.error?.message || "";
+
+        if (apiErrorReason === "API_KEY_INVALID" || apiErrorMessage.toLowerCase().includes("api key not valid")) {
+          return new Response(
+            JSON.stringify({
+              error: "invalid_key",
+              message: "Your Gemini API key appears to be invalid. Please check and re-enter your GEMINI_API_KEY in your Netlify dashboard.",
+            }),
+            { status: 401, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
+        if (geminiRes.status === 429 || apiErrorReason === "RESOURCE_EXHAUSTED") {
+          return new Response(
+            JSON.stringify({
+              error: "rate_limited",
+              message: "The AI service is temporarily busy (quota limit). Please wait 30 seconds and try again.",
+            }),
+            { status: 429, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
+        // If it's a 400 bad request, try next model or format fallback
+        if (geminiRes.status === 400 && model !== CANDIDATE_MODELS[CANDIDATE_MODELS.length - 1]) {
+          continue;
+        }
+
         return new Response(
           JSON.stringify({
-            error: "rate_limited",
-            message: "The AI service is temporarily busy. Please wait a moment and try again.",
+            error: "ai_error",
+            message: apiErrorMessage || "The AI service encountered an issue. Please try again.",
           }),
-          { status: 429, headers: { "Content-Type": "application/json" } }
+          { status: geminiRes.status, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      const geminiData = await geminiRes.json();
+      const candidate = geminiData.candidates?.[0];
+
+      if (!candidate) {
+        return new Response(
+          JSON.stringify({
+            error: "no_response",
+            message: "The AI did not generate a response. Please try rephrasing your question.",
+          }),
+          { status: 502, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      if (candidate.finishReason === "SAFETY") {
+        return new Response(
+          JSON.stringify({
+            error: "safety_block",
+            message: "Your inquiry triggered safety guidelines. Please rephrase your medical question.",
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      const responseText = candidate.content?.parts?.map((p) => p.text).join("") || "";
+
+      if (!responseText) {
+        return new Response(
+          JSON.stringify({
+            error: "empty_response",
+            message: "The AI returned an empty response. Please try again.",
+          }),
+          { status: 502, headers: { "Content-Type": "application/json" } }
         );
       }
 
       return new Response(
         JSON.stringify({
-          error: "ai_error",
-          message: "The AI service returned an error. Please try again.",
+          success: true,
+          response: responseText,
+          model,
+          usage: geminiData.usageMetadata || null,
         }),
-        { status: 502, headers: { "Content-Type": "application/json" } }
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Content-Type-Options": "nosniff",
+          },
+        }
       );
+    } catch (err) {
+      console.warn(`Fetch error for model ${model}:`, err?.message);
+      lastErrorText = err?.message || "Network error";
     }
-
-    const geminiData = await geminiRes.json();
-
-    // Extract text from Gemini response
-    const candidate = geminiData.candidates?.[0];
-    if (!candidate) {
-      return new Response(
-        JSON.stringify({
-          error: "no_response",
-          message: "The AI did not return a response. Please try rephrasing your question.",
-        }),
-        { status: 502, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    // Handle safety blocks
-    if (candidate.finishReason === "SAFETY") {
-      return new Response(
-        JSON.stringify({
-          error: "safety_block",
-          message:
-            "Your message was flagged by safety filters. Please rephrase your question.",
-        }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    const responseText =
-      candidate.content?.parts?.map((p) => p.text).join("") || "";
-
-    if (!responseText) {
-      return new Response(
-        JSON.stringify({
-          error: "empty_response",
-          message: "The AI returned an empty response. Please try again.",
-        }),
-        { status: 502, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        response: responseText,
-        model: MODEL,
-        usage: geminiData.usageMetadata || null,
-      }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "X-Content-Type-Options": "nosniff",
-        },
-      }
-    );
-  } catch (err) {
-    console.error("Unexpected error in ai-health-chat:", err?.message || err);
-    return new Response(
-      JSON.stringify({
-        error: "internal_error",
-        message: "An unexpected error occurred. Please try again.",
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
   }
+
+  // All models failed
+  return new Response(
+    JSON.stringify({
+      error: "ai_unavailable",
+      message: `Failed to connect to AI service: ${lastErrorText.substring(0, 200) || "Connection error"}. Please check your Netlify logs.`,
+    }),
+    { status: lastStatus || 502, headers: { "Content-Type": "application/json" } }
+  );
 }
