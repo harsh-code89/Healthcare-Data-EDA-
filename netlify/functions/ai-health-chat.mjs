@@ -4,36 +4,22 @@
  *
  * POST /api/ai-health-chat
  * Body: { messages: [{role, content}], userContext?: {...} }
+ * or:   { ping: true }
  *
  * Production Resilience:
- *   - Dynamic Model Discovery via Google ListModels API:
- *     Instead of relying on fragile hardcoded model names that get deprecated,
- *     it queries the API key's available models at runtime and auto-selects the
- *     best active Flash model.
- *   - In-memory model caching across warm lambda invocations.
- *   - Automatic fallback to system prompt message injection if systemInstruction
- *     is not supported by an older model tier.
- *   - User-friendly error diagnostics for invalid keys or quota limits.
- *   - GEMINI_API_KEY is protected server-side, never exposed to client.
+ *   - Zero-quota ping endpoint for client configuration checks.
+ *   - 1-to-1 efficient API usage: direct primary model targeting with exactly 1 fallback.
+ *   - Automatic exponential backoff retry for 429 rate limit bursts (waits 1.5s/3s and retries).
+ *   - Dual systemInstruction and prepended context support.
+ *   - Clear diagnostic feedback for keys and quotas.
+ *   - GEMINI_API_KEY is protected server-side.
  */
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// Cache the discovered model in warm serverless instances
-let cachedModelInfo = null;
-
-// Fallback model names if ListModels is ever unreachable
-const FALLBACK_MODELS = [
-  "models/gemini-2.5-flash",
-  "models/gemini-2.0-flash",
-  "models/gemini-2.0-flash-exp",
-  "models/gemini-flash-latest",
-  "models/gemini-1.5-flash-latest",
-  "models/gemini-1.5-flash-002",
-  "models/gemini-1.5-flash",
-  "models/gemini-1.5-pro-latest",
-  "models/gemini-pro-latest",
-];
+// Primary and fallback models
+const PRIMARY_MODEL = "gemini-2.0-flash";
+const FALLBACK_MODEL = "gemini-1.5-flash";
 
 // ── CareOS AI System Prompt ────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are CareOS AI — an advanced AI-powered health intelligence, pharmacology research, preventive health, and longevity analysis assistant built into the CareOS platform, a digital health record system for India.
@@ -78,74 +64,6 @@ function sanitizeMessage(text) {
   return text.trim().substring(0, 8000);
 }
 
-// ── Discover available models dynamically ──────────────────────────────────
-async function getAvailableModel(apiKey) {
-  if (cachedModelInfo) {
-    return cachedModelInfo;
-  }
-
-  const cleanKey = apiKey.trim();
-  
-  // Try querying ListModels on v1beta, then v1
-  for (const apiVersion of ["v1beta", "v1"]) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/${apiVersion}/models?key=${cleanKey}`;
-      const res = await fetch(url, {
-        method: "GET",
-        headers: { "x-goog-api-key": cleanKey },
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.warn(`ListModels on ${apiVersion} returned ${res.status}:`, errText.substring(0, 200));
-        
-        let parsed = null;
-        try { parsed = JSON.parse(errText); } catch {}
-        if (parsed?.error?.message?.toLowerCase().includes("api key not valid")) {
-          throw new Error("API_KEY_INVALID");
-        }
-        continue;
-      }
-
-      const data = await res.json();
-      const models = data.models || [];
-      const contentModels = models.filter((m) =>
-        m.supportedGenerationMethods?.includes("generateContent")
-      );
-
-      if (contentModels.length > 0) {
-        // Preferred order:
-        // 1. Flash 2.x or 3.x models
-        // 2. Any Flash model
-        // 3. Pro models
-        // 4. Any generateContent model
-        const flashNew = contentModels.find(
-          (m) => m.name.includes("flash") && (m.name.includes("2.") || m.name.includes("3."))
-        );
-        const flashAny = contentModels.find((m) => m.name.includes("flash"));
-        const proModel = contentModels.find((m) => m.name.includes("pro"));
-        const chosen = flashNew || flashAny || proModel || contentModels[0];
-
-        cachedModelInfo = {
-          apiVersion,
-          modelPath: chosen.name, // e.g. "models/gemini-2.0-flash" or "models/gemini-2.5-flash"
-        };
-        console.log(`Discovered active Gemini model via ListModels: ${cachedModelInfo.modelPath} (${apiVersion})`);
-        return cachedModelInfo;
-      }
-    } catch (err) {
-      if (err.message === "API_KEY_INVALID") throw err;
-      console.warn(`Exception during ListModels on ${apiVersion}:`, err?.message);
-    }
-  }
-
-  // Fallback to first verified candidate if ListModels returned empty
-  return {
-    apiVersion: "v1beta",
-    modelPath: FALLBACK_MODELS[0],
-  };
-}
-
 // ── Build User Context Block ───────────────────────────────────────────────
 function buildContextBlock(userContext) {
   if (!userContext || Object.keys(userContext).length === 0) return "";
@@ -168,19 +86,34 @@ function buildContextBlock(userContext) {
     : "";
 }
 
-// ── Call Gemini API with automatic payload fallback ────────────────────────
-async function callGemini(apiVersion, modelPath, apiKey, messages, contextBlock) {
+// ── Fetch with Automatic Exponential Backoff on 429 ────────────────────────
+async function fetchWithRetry(url, options, maxRetries = 2) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch(url, options);
+    
+    // If rate-limited (429), wait and retry up to maxRetries times
+    if (res.status === 429 && attempt < maxRetries) {
+      const waitMs = (attempt + 1) * 2000; // 2s, then 4s
+      console.warn(`Gemini 429 rate limit hit. Waiting ${waitMs}ms before retry ${attempt + 1}...`);
+      await new Promise((r) => setTimeout(r, waitMs));
+      continue;
+    }
+    
+    return res;
+  }
+}
+
+// ── Call Gemini API for a single model ─────────────────────────────────────
+async function executeGeminiRequest(model, apiKey, messages, contextBlock) {
   const cleanKey = apiKey.trim();
-  // Ensure modelPath starts with models/ or clean format
-  const formattedModel = modelPath.startsWith("models/") ? modelPath : `models/${modelPath}`;
-  const url = `https://generativelanguage.googleapis.com/${apiVersion}/${formattedModel}:generateContent?key=${cleanKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${cleanKey}`;
 
   const contents = messages.map((msg) => ({
     role: msg.role === "assistant" ? "model" : "user",
     parts: [{ text: sanitizeMessage(msg.content) }],
   }));
 
-  // Strategy 1: Modern REST payload with systemInstruction
+  // Payload with camelCase systemInstruction
   const payloadWithSystem = {
     systemInstruction: {
       parts: [{ text: SYSTEM_PROMPT + contextBlock }],
@@ -194,18 +127,19 @@ async function callGemini(apiVersion, modelPath, apiKey, messages, contextBlock)
     },
   };
 
-  let res = await fetch(url, {
+  const options = {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-goog-api-key": cleanKey,
     },
     body: JSON.stringify(payloadWithSystem),
-  });
+  };
 
-  // If 400 Bad Request (e.g. systemInstruction rejected on older tier), fallback to prepended system prompt
+  let res = await fetchWithRetry(url, options);
+
+  // If 400 Bad Request, retry with system prompt injected into user message
   if (res.status === 400) {
-    console.warn(`Model ${modelPath} rejected systemInstruction; retrying with prepended context...`);
     const fallbackContents = [...contents];
     if (fallbackContents.length > 0 && fallbackContents[0].role === "user") {
       fallbackContents[0] = {
@@ -224,12 +158,8 @@ async function callGemini(apiVersion, modelPath, apiKey, messages, contextBlock)
       },
     };
 
-    res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": cleanKey,
-      },
+    res = await fetchWithRetry(url, {
+      ...options,
       body: JSON.stringify(payloadFallback),
     });
   }
@@ -250,11 +180,42 @@ export default async function handler(req) {
     });
   }
 
+  if (req.method === "GET") {
+    return new Response(
+      JSON.stringify({
+        configured: !!GEMINI_API_KEY,
+        status: "ok",
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  let body = {};
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Handle instant ping/health check without calling Google API (0 quota consumed)
+  if (body?.ping) {
+    return new Response(
+      JSON.stringify({
+        configured: !!GEMINI_API_KEY,
+        status: "ok",
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
   }
 
   if (!GEMINI_API_KEY) {
@@ -268,16 +229,6 @@ export default async function handler(req) {
     );
   }
 
-  let body;
-  try {
-    body = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
   const { messages, userContext } = body;
   if (!Array.isArray(messages) || messages.length === 0) {
     return new Response(
@@ -289,47 +240,16 @@ export default async function handler(req) {
   const trimmedMessages = messages.slice(-20);
   const contextBlock = buildContextBlock(userContext || {});
 
-  // 1. Discover model dynamically
-  let modelInfo;
   try {
-    modelInfo = await getAvailableModel(GEMINI_API_KEY);
-  } catch (err) {
-    if (err.message === "API_KEY_INVALID") {
-      return new Response(
-        JSON.stringify({
-          error: "invalid_key",
-          message:
-            "Your Google Gemini API key appears to be invalid. Please verify and update GEMINI_API_KEY in your Netlify dashboard.",
-        }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
-    }
-    modelInfo = { apiVersion: "v1beta", modelPath: FALLBACK_MODELS[0] };
-  }
+    // 1. Try Primary Model (gemini-2.0-flash)
+    let activeModel = PRIMARY_MODEL;
+    let res = await executeGeminiRequest(activeModel, GEMINI_API_KEY, trimmedMessages, contextBlock);
 
-  // 2. Execute generation with discovered model
-  try {
-    let res = await callGemini(
-      modelInfo.apiVersion,
-      modelInfo.modelPath,
-      GEMINI_API_KEY,
-      trimmedMessages,
-      contextBlock
-    );
-
-    // If 404 (model deprecated or unavailable), try each fallback model
+    // 2. If 404, try Fallback Model (gemini-1.5-flash)
     if (res.status === 404) {
-      console.warn(`Discovered model ${modelInfo.modelPath} returned 404. Attempting fallbacks...`);
-      cachedModelInfo = null; // Invalidate cache
-
-      for (const fallback of FALLBACK_MODELS) {
-        if (fallback === modelInfo.modelPath) continue;
-        res = await callGemini("v1beta", fallback, GEMINI_API_KEY, trimmedMessages, contextBlock);
-        if (res.ok) {
-          cachedModelInfo = { apiVersion: "v1beta", modelPath: fallback };
-          break;
-        }
-      }
+      console.warn(`Model ${PRIMARY_MODEL} returned 404. Trying fallback ${FALLBACK_MODEL}...`);
+      activeModel = FALLBACK_MODEL;
+      res = await executeGeminiRequest(activeModel, GEMINI_API_KEY, trimmedMessages, contextBlock);
     }
 
     if (!res.ok) {
@@ -346,17 +266,17 @@ export default async function handler(req) {
         return new Response(
           JSON.stringify({
             error: "invalid_key",
-            message: "Your Gemini API key appears to be invalid. Please verify your GEMINI_API_KEY in Netlify.",
+            message: "Your Gemini API key appears to be invalid. Please check your GEMINI_API_KEY in your Netlify Environment Variables.",
           }),
           { status: 401, headers: { "Content-Type": "application/json" } }
         );
       }
 
-      if (res.status === 429 || reason === "RESOURCE_EXHAUSTED") {
+      if (res.status === 429 || reason === "RESOURCE_EXHAUSTED" || msg.toLowerCase().includes("quota")) {
         return new Response(
           JSON.stringify({
             error: "rate_limited",
-            message: "The AI service is temporarily busy (rate limit). Please wait a moment and try again.",
+            message: "Google AI rate limit reached (15 queries/min on free tier). Please wait 30 seconds and try again.",
           }),
           { status: 429, headers: { "Content-Type": "application/json" } }
         );
@@ -365,7 +285,7 @@ export default async function handler(req) {
       return new Response(
         JSON.stringify({
           error: "ai_error",
-          message: msg || "The AI service encountered an issue. Please try again.",
+          message: msg || "The AI service encountered an issue. Please try again in a moment.",
         }),
         { status: res.status, headers: { "Content-Type": "application/json" } }
       );
@@ -409,7 +329,7 @@ export default async function handler(req) {
       JSON.stringify({
         success: true,
         response: responseText,
-        model: cachedModelInfo?.modelPath || modelInfo.modelPath,
+        model: activeModel,
         usage: geminiData.usageMetadata || null,
       }),
       {

@@ -257,16 +257,17 @@ export function AIAssistant() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const initialPromptFired = useRef(false);
 
-  // Check if AI is configured on first interaction
+  // Check if AI is configured on first interaction (0 quota consumed)
   const checkConfiguration = useCallback(async () => {
     if (isConfigured !== null) return;
     try {
       const res = await fetch('/api/ai-health-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: 'ping' }] }),
+        body: JSON.stringify({ ping: true }),
       });
-      setIsConfigured(res.status !== 503);
+      const data = await res.json().catch(() => ({}));
+      setIsConfigured(data.configured ?? res.status !== 503);
     } catch {
       setIsConfigured(false);
     }
@@ -595,9 +596,22 @@ export function AIAssistant() {
                       }`}
                     >
                       {msg.isError ? (
-                        <div className="flex items-start gap-2">
-                          <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-                          <p className="text-sm text-red-700">{msg.content}</p>
+                        <div className="space-y-2">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                            <p className="text-sm text-red-700">{msg.content}</p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const idx = messages.findIndex(m => m.id === msg.id);
+                              if (idx > 0 && messages[idx - 1].role === 'user') {
+                                sendMessage(messages[idx - 1].content);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 bg-red-100 hover:bg-red-200/80 px-2.5 py-1 rounded-md transition-colors"
+                          >
+                            <RotateCcw className="h-3 w-3" /> Retry question
+                          </button>
                         </div>
                       ) : (
                         renderContent(msg.content)
