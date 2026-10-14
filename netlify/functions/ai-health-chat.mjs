@@ -17,9 +17,12 @@
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// Primary and fallback models
-const PRIMARY_MODEL = "gemini-2.0-flash";
-const FALLBACK_MODEL = "gemini-1.5-flash";
+// Candidate models in priority order (gemini-2.5-flash is the primary active model)
+const CANDIDATE_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.5-pro",
+  "gemini-2.0-flash",
+];
 
 // ── CareOS AI System Prompt ────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are CareOS AI — an advanced AI-powered health intelligence, pharmacology research, preventive health, and longevity analysis assistant built into the CareOS platform, a digital health record system for India.
@@ -241,15 +244,16 @@ export default async function handler(req) {
   const contextBlock = buildContextBlock(userContext || {});
 
   try {
-    // 1. Try Primary Model (gemini-2.0-flash)
-    let activeModel = PRIMARY_MODEL;
-    let res = await executeGeminiRequest(activeModel, GEMINI_API_KEY, trimmedMessages, contextBlock);
+    let activeModel = CANDIDATE_MODELS[0];
+    let res;
 
-    // 2. If 404, try Fallback Model (gemini-1.5-flash)
-    if (res.status === 404) {
-      console.warn(`Model ${PRIMARY_MODEL} returned 404. Trying fallback ${FALLBACK_MODEL}...`);
-      activeModel = FALLBACK_MODEL;
+    for (const model of CANDIDATE_MODELS) {
+      activeModel = model;
       res = await executeGeminiRequest(activeModel, GEMINI_API_KEY, trimmedMessages, contextBlock);
+      if (res.status !== 404) {
+        break;
+      }
+      console.warn(`Model ${model} returned 404. Trying next candidate...`);
     }
 
     if (!res.ok) {
