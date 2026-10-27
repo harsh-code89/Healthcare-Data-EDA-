@@ -14,7 +14,7 @@
 
 import { routeHealthInquiry, getCircuitStatus } from "./ai/router.mjs";
 import { buildContextBlock } from "./ai/safety-system.mjs";
-import { executeGemini } from "./ai/gemini-provider.mjs";
+import { executeGemini, discoverGeminiModels } from "./ai/gemini-provider.mjs";
 import { executeOpenAI } from "./ai/openai-provider.mjs";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
@@ -58,6 +58,15 @@ export default async function handler(req) {
         }
       }
 
+      let discovered = [];
+      if (GEMINI_API_KEY) {
+        try {
+          discovered = await discoverGeminiModels(GEMINI_API_KEY);
+        } catch (e) {
+          discovered = [e.message];
+        }
+      }
+
       return new Response(
         JSON.stringify({
           status: "diagnostic_test",
@@ -67,6 +76,7 @@ export default async function handler(req) {
             model: geminiProbe?.model,
             category: geminiProbe?.category,
             error: geminiProbe?.error,
+            discoveredModels: discovered,
           },
           openai: {
             configured: !!OPENAI_API_KEY,
