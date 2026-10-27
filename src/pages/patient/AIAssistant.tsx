@@ -15,6 +15,9 @@ interface Message {
   content: string;
   timestamp: string;
   isError?: boolean;
+  provider?: string;
+  model?: string;
+  isFallback?: boolean;
 }
 
 // ── Suggested prompt categories ───────────────────────────────────────────
@@ -370,6 +373,9 @@ export function AIAssistant() {
           role: 'assistant',
           content: data.response,
           timestamp: new Date().toISOString(),
+          provider: data.provider,
+          model: data.model,
+          isFallback: data.isFallback,
         },
       ]);
     } catch {
@@ -459,7 +465,7 @@ export function AIAssistant() {
             <h2 className="font-bold text-slate-900 text-base">CareOS AI</h2>
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-xs text-slate-500">Health Intelligence · Powered by Gemini 3.8 Flash</p>
+              <p className="text-xs text-slate-500">Health Intelligence · Gemini & OpenAI Dual-Engine</p>
             </div>
           </div>
         </div>
@@ -620,12 +626,21 @@ export function AIAssistant() {
                       {/* Message actions */}
                       {!msg.isError && (
                         <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-50">
-                          <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
                             <Clock className="h-3 w-3" />
                             {new Date(msg.timestamp).toLocaleTimeString([], {
                               hour: '2-digit',
                               minute: '2-digit',
                             })}
+                            {msg.model && (
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                                msg.isFallback
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {msg.isFallback ? `⚡ Fallback: ${msg.model}` : msg.model}
+                              </span>
+                            )}
                           </div>
                           <CopyButton text={msg.content} />
                         </div>
