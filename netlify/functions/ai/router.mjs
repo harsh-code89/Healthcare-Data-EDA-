@@ -232,6 +232,8 @@ export async function routeHealthInquiry({
     } else if (circuit.lastFailureCategory === FailureCategory.RATE_LIMIT || circuit.lastFailureCategory === FailureCategory.QUOTA_EXHAUSTED) {
       userFriendlyError = "Google Gemini rate limit reached. Add an OPENAI_API_KEY to enable automatic secondary failover, or wait 30 seconds.";
     }
+  } else if (openAIFailureInfo?.category === FailureCategory.QUOTA_EXHAUSTED) {
+    userFriendlyError = "Google Gemini is temporarily unavailable, and your configured OpenAI backup account has no remaining credits ($0 balance). Please add credits to your OpenAI account at platform.openai.com/settings/organization/billing, or try again in 30 seconds.";
   }
 
   return {

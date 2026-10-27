@@ -8,8 +8,19 @@ import { SYSTEM_PROMPT, sanitizeMessage, buildUnifiedPrompt } from "./safety-sys
 import { classifyError, FailureCategory } from "./types-and-errors.mjs";
 
 const DEFAULT_MODELS = {
-  standard: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-3.8-pro"],
-  complex: ["gemini-3.8-pro", "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-2.5-pro"],
+  standard: [
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.8-flash",
+  ],
+  complex: [
+    "gemini-3.5-flash",
+    "gemini-3.7-flash",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
+  ],
 };
 
 const API_REVISION = "2026-05-20";
@@ -108,7 +119,6 @@ async function callGenerateContent(model, apiKey, messages, contextBlock) {
     headers: {
       "Content-Type": "application/json",
       "x-goog-api-key": apiKey.trim(),
-      "Api-Revision": API_REVISION,
     },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM_PROMPT + contextBlock }] },
@@ -162,12 +172,12 @@ export async function executeGemini(apiKey, messages, contextBlock, complexity =
     const isFallbackModel = i > 0;
 
     try {
-      // 1. Try Interactions API first
-      let res = await callInteractions(model, apiKey, promptText);
+      // 1. Try generateContent API first (the proven Google AI Studio endpoint)
+      let res = await callGenerateContent(model, apiKey, messages, contextBlock);
 
-      // 2. If Interactions API returned 404 or 400, try generateContent
+      // 2. If generateContent returned 404 or 400, try Interactions API
       if (!res.ok && (res.status === 404 || res.status === 400)) {
-        res = await callGenerateContent(model, apiKey, messages, contextBlock);
+        res = await callInteractions(model, apiKey, promptText);
       }
 
       if (res.ok) {

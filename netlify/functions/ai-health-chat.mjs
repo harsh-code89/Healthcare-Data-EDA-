@@ -41,35 +41,8 @@ export default async function handler(req) {
     if (url.searchParams.get("test") === "true") {
       let geminiProbe = null;
       let openaiProbe = null;
-      let modelTests = {};
-
-      const testModels = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-pro"];
 
       if (GEMINI_API_KEY) {
-        for (const m of testModels) {
-          try {
-            // Direct generateContent test
-            const gcUrl = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${GEMINI_API_KEY.trim()}`;
-            const res = await fetch(gcUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [{ role: "user", parts: [{ text: "hi" }] }]
-              })
-            });
-            const text = await res.text();
-            let parsed = null;
-            try { parsed = JSON.parse(text); } catch {}
-            modelTests[m] = {
-              status: res.status,
-              ok: res.ok,
-              sampleText: parsed?.candidates?.[0]?.content?.parts?.[0]?.text || text.substring(0, 150),
-            };
-          } catch (e) {
-            modelTests[m] = { error: e.message };
-          }
-        }
-
         try {
           geminiProbe = await executeGemini(GEMINI_API_KEY, [{ role: "user", content: "Ping" }], "", "standard");
         } catch (err) {
@@ -85,26 +58,15 @@ export default async function handler(req) {
         }
       }
 
-      let discovered = [];
-      if (GEMINI_API_KEY) {
-        try {
-          discovered = await discoverGeminiModels(GEMINI_API_KEY);
-        } catch (e) {
-          discovered = [e.message];
-        }
-      }
-
       return new Response(
         JSON.stringify({
           status: "diagnostic_test",
-          modelTests,
           gemini: {
             configured: !!GEMINI_API_KEY,
             success: geminiProbe?.success || false,
             model: geminiProbe?.model,
             category: geminiProbe?.category,
             error: geminiProbe?.error,
-            discoveredModels: discovered,
           },
           openai: {
             configured: !!OPENAI_API_KEY,
