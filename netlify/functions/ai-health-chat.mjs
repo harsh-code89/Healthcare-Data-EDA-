@@ -1,28 +1,18 @@
 /**
  * Netlify Function: ai-health-chat
- * CareOS AI — Resilient Health Intelligence Agent powered by Google Gemini.
+ * CareOS AI — Health Intelligence Agent powered by Google Gemini (gemini-3.8-flash).
+ *
+ * Implements Google's official Interactions API & generateContent API with gemini-3.8-flash
+ * per Google AI Studio 2026 specifications.
  *
  * POST /api/ai-health-chat
  * Body: { messages: [{role, content}], userContext?: {...} }
  * or:   { ping: true }
- *
- * Production Resilience:
- *   - Zero-quota ping endpoint for client configuration checks.
- *   - 1-to-1 efficient API usage: direct primary model targeting with exactly 1 fallback.
- *   - Automatic exponential backoff retry for 429 rate limit bursts (waits 1.5s/3s and retries).
- *   - Dual systemInstruction and prepended context support.
- *   - Clear diagnostic feedback for keys and quotas.
- *   - GEMINI_API_KEY is protected server-side.
  */
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-// Candidate models in priority order (gemini-2.5-flash is the primary active model)
-const CANDIDATE_MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.5-pro",
-  "gemini-2.0-flash",
-];
+const MODEL_NAME = "gemini-3.8-flash";
+const API_REVISION = "2026-05-20";
 
 // ── CareOS AI System Prompt ────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are CareOS AI — an advanced AI-powered health intelligence, pharmacology research, preventive health, and longevity analysis assistant built into the CareOS platform, a digital health record system for India.
@@ -89,14 +79,31 @@ function buildContextBlock(userContext) {
     : "";
 }
 
+// ── Build Single Prompt String for Interactions API ────────────────────────
+function buildInteractionsPrompt(messages, contextBlock) {
+  let prompt = `[SYSTEM INSTRUCTIONS]\n${SYSTEM_PROMPT}${contextBlock}\n\n`;
+
+  if (messages.length > 1) {
+    prompt += `[PREVIOUS CONVERSATION]\n`;
+    for (let i = 0; i < messages.length - 1; i++) {
+      const msg = messages[i];
+      const speaker = msg.role === "assistant" ? "CareOS AI" : "User";
+      prompt += `${speaker}: ${sanitizeMessage(msg.content)}\n\n`;
+    }
+  }
+
+  const lastMessage = messages[messages.length - 1];
+  prompt += `[CURRENT USER QUERY]\nUser: ${sanitizeMessage(lastMessage.content)}\n\nCareOS AI:`;
+  return prompt;
+}
+
 // ── Fetch with Automatic Exponential Backoff on 429 ────────────────────────
 async function fetchWithRetry(url, options, maxRetries = 2) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const res = await fetch(url, options);
     
-    // If rate-limited (429), wait and retry up to maxRetries times
     if (res.status === 429 && attempt < maxRetries) {
-      const waitMs = (attempt + 1) * 2000; // 2s, then 4s
+      const waitMs = (attempt + 1) * 2000;
       console.warn(`Gemini 429 rate limit hit. Waiting ${waitMs}ms before retry ${attempt + 1}...`);
       await new Promise((r) => setTimeout(r, waitMs));
       continue;
@@ -106,18 +113,38 @@ async function fetchWithRetry(url, options, maxRetries = 2) {
   }
 }
 
-// ── Call Gemini API for a single model ─────────────────────────────────────
-async function executeGeminiRequest(model, apiKey, messages, contextBlock) {
+// ── Engine 1: Google Interactions API (Official 2026 Recommended) ──────────
+async function callInteractionsAPI(apiKey, promptText) {
   const cleanKey = apiKey.trim();
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${cleanKey}`;
+  const url = "https://generativelanguage.googleapis.com/v1beta/interactions";
+
+  const options = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": cleanKey,
+      "Api-Revision": API_REVISION,
+    },
+    body: JSON.stringify({
+      model: MODEL_NAME,
+      input: promptText,
+    }),
+  };
+
+  return await fetchWithRetry(url, options);
+}
+
+// ── Engine 2: Google generateContent API (gemini-3.8-flash fallback) ────────
+async function callGenerateContentAPI(apiKey, messages, contextBlock) {
+  const cleanKey = apiKey.trim();
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${cleanKey}`;
 
   const contents = messages.map((msg) => ({
     role: msg.role === "assistant" ? "model" : "user",
     parts: [{ text: sanitizeMessage(msg.content) }],
   }));
 
-  // Payload with camelCase systemInstruction
-  const payloadWithSystem = {
+  const payload = {
     systemInstruction: {
       parts: [{ text: SYSTEM_PROMPT + contextBlock }],
     },
@@ -135,13 +162,14 @@ async function executeGeminiRequest(model, apiKey, messages, contextBlock) {
     headers: {
       "Content-Type": "application/json",
       "x-goog-api-key": cleanKey,
+      "Api-Revision": API_REVISION,
     },
-    body: JSON.stringify(payloadWithSystem),
+    body: JSON.stringify(payload),
   };
 
   let res = await fetchWithRetry(url, options);
 
-  // If 400 Bad Request, retry with system prompt injected into user message
+  // If 400 Bad Request on systemInstruction, fallback to prepended context
   if (res.status === 400) {
     const fallbackContents = [...contents];
     if (fallbackContents.length > 0 && fallbackContents[0].role === "user") {
@@ -153,21 +181,45 @@ async function executeGeminiRequest(model, apiKey, messages, contextBlock) {
       };
     }
 
-    const payloadFallback = {
-      contents: fallbackContents,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 4096,
-      },
-    };
-
     res = await fetchWithRetry(url, {
       ...options,
-      body: JSON.stringify(payloadFallback),
+      body: JSON.stringify({
+        contents: fallbackContents,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 4096,
+        },
+      }),
     });
   }
 
   return res;
+}
+
+// ── Extract Text from Any Gemini API Response ───────────────────────────────
+function extractResponseText(data) {
+  if (!data) return "";
+  if (typeof data === "string") return data;
+
+  // Interactions API response formats
+  if (data.output_text) return data.output_text;
+  if (data.outputText) return data.outputText;
+  if (data.output?.text) return data.output.text;
+  if (data.interaction?.output_text) return data.interaction.output_text;
+  if (data.interaction?.outputText) return data.interaction.outputText;
+
+  // generateContent API response format
+  if (data.candidates?.[0]?.content?.parts) {
+    return data.candidates[0].content.parts.map((p) => p.text).join("");
+  }
+
+  // Array format
+  if (Array.isArray(data) && data[0]?.output_text) {
+    return data[0].output_text;
+  }
+  if (data.text) return data.text;
+
+  return "";
 }
 
 // ── Main Netlify Handler ───────────────────────────────────────────────────
@@ -188,6 +240,7 @@ export default async function handler(req) {
       JSON.stringify({
         configured: !!GEMINI_API_KEY,
         status: "ok",
+        model: MODEL_NAME,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
@@ -210,12 +263,13 @@ export default async function handler(req) {
     });
   }
 
-  // Handle instant ping/health check without calling Google API (0 quota consumed)
+  // Instant zero-quota configuration check
   if (body?.ping) {
     return new Response(
       JSON.stringify({
         configured: !!GEMINI_API_KEY,
         status: "ok",
+        model: MODEL_NAME,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
@@ -242,18 +296,20 @@ export default async function handler(req) {
 
   const trimmedMessages = messages.slice(-20);
   const contextBlock = buildContextBlock(userContext || {});
+  const interactionsPrompt = buildInteractionsPrompt(trimmedMessages, contextBlock);
 
   try {
-    let activeModel = CANDIDATE_MODELS[0];
     let res;
+    let engineUsed = "interactions";
 
-    for (const model of CANDIDATE_MODELS) {
-      activeModel = model;
-      res = await executeGeminiRequest(activeModel, GEMINI_API_KEY, trimmedMessages, contextBlock);
-      if (res.status !== 404) {
-        break;
-      }
-      console.warn(`Model ${model} returned 404. Trying next candidate...`);
+    // 1. Try Google Interactions API (Primary 2026 Recommended)
+    res = await callInteractionsAPI(GEMINI_API_KEY, interactionsPrompt);
+
+    // 2. Fallback to generateContent API if Interactions API fails with 404 or 400
+    if (!res.ok && (res.status === 404 || res.status === 400)) {
+      console.warn(`Interactions API returned ${res.status}. Falling back to generateContent API...`);
+      engineUsed = "generateContent";
+      res = await callGenerateContentAPI(GEMINI_API_KEY, trimmedMessages, contextBlock);
     }
 
     if (!res.ok) {
@@ -262,6 +318,7 @@ export default async function handler(req) {
 
       let parsed = null;
       try { parsed = JSON.parse(errText); } catch {}
+      if (Array.isArray(parsed) && parsed[0]) parsed = parsed[0];
 
       const reason = parsed?.error?.details?.[0]?.reason || "";
       const msg = parsed?.error?.message || "";
@@ -280,7 +337,7 @@ export default async function handler(req) {
         return new Response(
           JSON.stringify({
             error: "rate_limited",
-            message: "Google AI rate limit reached (15 queries/min on free tier). Please wait 30 seconds and try again.",
+            message: "Google AI rate limit reached (15 queries/min on free tier). Please wait 30 seconds and click 'Retry question'.",
           }),
           { status: 429, headers: { "Content-Type": "application/json" } }
         );
@@ -295,30 +352,9 @@ export default async function handler(req) {
       );
     }
 
-    const geminiData = await res.json();
-    const candidate = geminiData.candidates?.[0];
+    const resData = await res.json();
+    const responseText = extractResponseText(resData);
 
-    if (!candidate) {
-      return new Response(
-        JSON.stringify({
-          error: "no_response",
-          message: "The AI did not generate a response. Please try rephrasing your question.",
-        }),
-        { status: 502, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    if (candidate.finishReason === "SAFETY") {
-      return new Response(
-        JSON.stringify({
-          error: "safety_block",
-          message: "Your message triggered medical safety guidelines. Please rephrase your question.",
-        }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    const responseText = candidate.content?.parts?.map((p) => p.text).join("") || "";
     if (!responseText) {
       return new Response(
         JSON.stringify({
@@ -333,8 +369,8 @@ export default async function handler(req) {
       JSON.stringify({
         success: true,
         response: responseText,
-        model: activeModel,
-        usage: geminiData.usageMetadata || null,
+        model: MODEL_NAME,
+        engine: engineUsed,
       }),
       {
         status: 200,

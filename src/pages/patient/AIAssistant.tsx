@@ -459,7 +459,7 @@ export function AIAssistant() {
             <h2 className="font-bold text-slate-900 text-base">CareOS AI</h2>
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-xs text-slate-500">Health Intelligence · Powered by Gemini</p>
+              <p className="text-xs text-slate-500">Health Intelligence · Powered by Gemini 3.8 Flash</p>
             </div>
           </div>
         </div>
