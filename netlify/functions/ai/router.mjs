@@ -108,6 +108,8 @@ export async function routeHealthInquiry({
   let modelUsed = null;
   let routingReason = "gemini_primary";
   let fallbackAttempts = 0;
+  let geminiFailureInfo = null;
+  let openAIFailureInfo = null;
 
   // ─────────────────────────────────────────────────────────────────────────
   // STAGE 1: Attempt Gemini (if circuit is CLOSED or HALF_OPEN)
@@ -149,6 +151,11 @@ export async function routeHealthInquiry({
     }
 
     // Gemini failed
+    geminiFailureInfo = {
+      category: geminiResult.category,
+      error: geminiResult.error,
+      model: geminiResult.model,
+    };
     fallbackAttempts = (geminiResult.attempts || 1);
     recordGeminiFailure(geminiResult.category);
     routingReason = `openai_fallback_gemini_${geminiResult.category.toLowerCase()}`;
@@ -193,6 +200,11 @@ export async function routeHealthInquiry({
     }
 
     // OpenAI also failed
+    openAIFailureInfo = {
+      category: openAIResult.category,
+      error: openAIResult.error,
+      model: openAIResult.model,
+    };
     console.error(`[Router] OpenAI fallback also failed (${openAIResult.category}):`, openAIResult.error);
     logTelemetry({
       correlationId,
@@ -229,5 +241,9 @@ export async function routeHealthInquiry({
     circuitState: circuit.state,
     geminiConfigured: !!geminiKey,
     openaiConfigured: isOpenAIConfigured,
+    diagnostics: {
+      gemini: geminiFailureInfo,
+      openai: openAIFailureInfo,
+    },
   };
 }

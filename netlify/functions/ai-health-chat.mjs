@@ -14,6 +14,8 @@
 
 import { routeHealthInquiry, getCircuitStatus } from "./ai/router.mjs";
 import { buildContextBlock } from "./ai/safety-system.mjs";
+import { executeGemini } from "./ai/gemini-provider.mjs";
+import { executeOpenAI } from "./ai/openai-provider.mjs";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -31,9 +33,60 @@ export default async function handler(req) {
     });
   }
 
-  // Diagnostic Health Check
+  // Diagnostic Health Check & Live Probe
   if (req.method === "GET") {
+    const url = new URL(req.url, "http://localhost");
     const circuit = getCircuitStatus();
+
+    if (url.searchParams.get("test") === "true") {
+      let geminiProbe = null;
+      let openaiProbe = null;
+
+      if (GEMINI_API_KEY) {
+        try {
+          geminiProbe = await executeGemini(GEMINI_API_KEY, [{ role: "user", content: "Ping" }], "", "standard");
+        } catch (err) {
+          geminiProbe = { error: err.message };
+        }
+      }
+
+      if (OPENAI_API_KEY) {
+        try {
+          openaiProbe = await executeOpenAI(OPENAI_API_KEY, [{ role: "user", content: "Ping" }], "", "standard");
+        } catch (err) {
+          openaiProbe = { error: err.message };
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          status: "diagnostic_test",
+          gemini: {
+            configured: !!GEMINI_API_KEY,
+            success: geminiProbe?.success || false,
+            model: geminiProbe?.model,
+            category: geminiProbe?.category,
+            error: geminiProbe?.error,
+          },
+          openai: {
+            configured: !!OPENAI_API_KEY,
+            success: openaiProbe?.success || false,
+            model: openaiProbe?.model,
+            category: openaiProbe?.category,
+            error: openaiProbe?.error,
+          },
+          circuit,
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+          },
+        }
+      );
+    }
+
     return new Response(
       JSON.stringify({
         status: "ok",
@@ -115,6 +168,7 @@ export default async function handler(req) {
         error: result.error,
         message: result.message,
         circuitState: result.circuitState,
+        diagnostics: result.diagnostics,
       }),
       { status: 503, headers: { "Content-Type": "application/json" } }
     );

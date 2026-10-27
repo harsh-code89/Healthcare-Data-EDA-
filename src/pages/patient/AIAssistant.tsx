@@ -344,7 +344,7 @@ export function AIAssistant() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        let errorMessage = data.message || 'Something went wrong. Please try again.';
+        let errorMessage = data.message || (typeof data.error === 'string' ? data.error : '') || 'Something went wrong. Please try again.';
         if (typeof errorMessage === 'string' && (errorMessage.includes('{"error"') || errorMessage.startsWith('{'))) {
           try {
             const jsonPart = errorMessage.substring(errorMessage.indexOf('{'));

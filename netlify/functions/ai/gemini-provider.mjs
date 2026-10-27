@@ -8,8 +8,8 @@ import { SYSTEM_PROMPT, sanitizeMessage, buildUnifiedPrompt } from "./safety-sys
 import { classifyError, FailureCategory } from "./types-and-errors.mjs";
 
 const DEFAULT_MODELS = {
-  standard: ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-3.8-pro"],
-  complex: ["gemini-3.8-pro", "gemini-3.8-flash", "gemini-2.5-pro"],
+  standard: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-3.8-pro"],
+  complex: ["gemini-3.8-pro", "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-2.5-pro"],
 };
 
 const API_REVISION = "2026-05-20";
